@@ -105,6 +105,9 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
     }
   }, [])
 
+  // --- Shared guard: prevents OAuth listener from double-processing when session restore handles it ---
+  const oauthHandled = useRef(false)
+
   // --- Restore session from localStorage on mount ---
   useEffect(() => {
     try {
@@ -112,9 +115,13 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
       if (stored) {
         const parsed = JSON.parse(stored)
         if (parsed.session?.expires_at && parsed.session.expires_at * 1000 > Date.now()) {
+          oauthHandled.current = true
+          setCustodialLoading(true)
           setUser(parsed.user)
           setSession(parsed.session)
-          fetchCustodialAccount(parsed.session.access_token)
+          fetchCustodialAccount(parsed.session.access_token).finally(() => {
+            setCustodialLoading(false)
+          })
         } else {
           localStorage.removeItem(SESSION_KEY)
         }
@@ -125,7 +132,6 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
   }, [])
 
   // --- Listen for OAuth auth state changes ---
-  const oauthHandled = useRef(false)
   useEffect(() => {
     const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange(
       async (event, supaSession) => {
@@ -144,31 +150,37 @@ export function ConnectionProvider({ children }: { children: React.ReactNode }) 
             expires_at: supaSession.expires_at || 0,
           }
 
+          setCustodialLoading(true)
           persistSession(userData, sessionData)
 
-          // Fetch existing account or auto-create one
-          const res = await fetch('/api/kms/account-info', {
-            headers: { Authorization: `Bearer ${supaSession.access_token}` },
-          })
-          const data = await res.json()
+          try {
+            // Fetch existing account or auto-create one
+            const res = await fetch('/api/kms/account-info', {
+              headers: { Authorization: `Bearer ${supaSession.access_token}` },
+            })
+            const data = await res.json()
 
-          if (data.success && data.account) {
-            setCustodialAccountId(data.account.hederaAccountId)
-          } else {
-            // Auto-create Hedera account for new OAuth users
-            try {
-              setCreatingAccount(true)
-              const createRes = await fetch('/api/kms/create-account', {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${supaSession.access_token}` },
-              })
-              const createData = await createRes.json()
-              if (createData.success) {
-                setCustodialAccountId(createData.hederaAccountId)
+            if (data.success && data.account) {
+              setCustodialAccountId(data.account.hederaAccountId)
+              setCustodialEvmAddress(data.account.evmAddress || null)
+            } else {
+              // Auto-create Hedera account for new OAuth users
+              try {
+                setCreatingAccount(true)
+                const createRes = await fetch('/api/kms/create-account', {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${supaSession.access_token}` },
+                })
+                const createData = await createRes.json()
+                if (createData.success) {
+                  setCustodialAccountId(createData.hederaAccountId)
+                }
+              } finally {
+                setCreatingAccount(false)
               }
-            } finally {
-              setCreatingAccount(false)
             }
+          } finally {
+            setCustodialLoading(false)
           }
         }
       }

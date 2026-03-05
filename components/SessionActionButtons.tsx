@@ -43,7 +43,18 @@ export function SessionActionButtons() {
     // Determine which buttons to render
     let buttons: React.ReactNode
 
-    if (account) {
+    if (loading && !account) {
+        // Session restoring — avoid flashing "Create" button while account loads
+        buttons = (
+            <button
+                disabled
+                className='auth-btn-primary relative overflow-hidden text-white font-semibold h-11 px-6 rounded-full flex items-center gap-2 text-[14px] disabled:opacity-40 disabled:cursor-not-allowed'
+            >
+                <Loader2 className='w-4 h-4 animate-spin' />
+                <span>Connecting...</span>
+            </button>
+        )
+    } else if (account) {
         // Connected state with Hedera account
         buttons = (
             <div className='flex items-center gap-2'>
