@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useConnectionContext } from '@/contexts/ConnectionContext'
+import { MissionsSheet } from './MissionsSheet'
 import { LoginDialog } from './auth/LoginDialog'
 import { FundAccountDialog } from './FundAccountDialog'
 import { Button } from './ui/button'
@@ -19,6 +20,7 @@ export function SessionActionButtons() {
         creatingAccount,
     } = useConnectionContext()
 
+    const [isMissionsSheetOpen, setIsMissionsSheetOpen] = useState(false)
     const [isConnectionSelectorOpen, setIsConnectionSelectorOpen] = useState(false)
     const [fundDialogAccountId, setFundDialogAccountId] = useState<string | null>(null)
 
@@ -57,8 +59,9 @@ export function SessionActionButtons() {
     } else if (account) {
         // Connected state with Hedera account
         buttons = (
-            <div className='flex items-center gap-2'>
+            <>
                 <Button
+                    onClick={() => setIsMissionsSheetOpen(true)}
                     variant="ghost"
                     className='relative group overflow-hidden bg-white/5 hover:bg-white/10 border border-white/10 hover:border-blue-500/30 text-white rounded-full pl-2 pr-4 h-11 transition-all duration-300'
                 >
@@ -70,20 +73,22 @@ export function SessionActionButtons() {
                                 <User className='w-3.5 h-3.5 text-green-400' />
                             </div>
                         </div>
-                        <span className='font-mono font-bold text-sm tracking-tight'>
-                            {formatAccount(account)}
-                        </span>
+                        <div className='flex flex-col items-start gap-0.5'>
+                            <span className='font-mono font-bold text-sm tracking-tight leading-none'>
+                                {formatAccount(account)}
+                            </span>
+                            <span className='text-[10px] text-blue-300 font-medium leading-none'>
+                                View Missions
+                            </span>
+                        </div>
                     </div>
                 </Button>
-                <Button
-                    onClick={disconnect}
-                    variant='ghost'
-                    size='icon'
-                    className='text-neutral-400 hover:text-white h-11 w-11 rounded-full'
-                >
-                    <LogOut className='w-4 h-4' />
-                </Button>
-            </div>
+                <MissionsSheet
+                    open={isMissionsSheetOpen}
+                    onOpenChange={setIsMissionsSheetOpen}
+                    accountId={account}
+                />
+            </>
         )
     } else if (user && !hasCustodialAccount) {
         // Signed in but no Hedera account yet

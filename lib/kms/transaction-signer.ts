@@ -192,12 +192,13 @@ export async function signAndExecuteTransfer(
 
 /**
  * Build, sign, and execute an AccountUpdateTransaction to rotate the account key.
- * Signs with the OLD key (current key that controls the account).
+ * Hedera requires signatures from BOTH the old key and the new key.
  */
 export async function signAndExecuteAccountUpdate(
-  kmsKeyId: string,
+  oldKmsKeyId: string,
   accountId: string,
-  publicKeyHex: string,
+  oldPublicKeyHex: string,
+  newKmsKeyId: string,
   newPublicKeyHex: string,
 ): Promise<string> {
   const client = getNetworkClient()
@@ -205,7 +206,7 @@ export async function signAndExecuteAccountUpdate(
   try {
     const payer = AccountId.fromString(accountId)
 
-    // Build the compressed public key for the new key (65-byte uncompressed → 33-byte compressed)
+    // Compress the new public key for Hedera (65-byte uncompressed → 33-byte compressed)
     const newPubKeyBytes = Buffer.from(newPublicKeyHex, 'hex')
     const newCompressedKey = PublicKey.fromBytesECDSA(
       newPubKeyBytes.length === 65
@@ -223,11 +224,42 @@ export async function signAndExecuteAccountUpdate(
       .setNodeAccountIds([DEFAULT_NODE])
       .freezeWith(client)
 
-    // Sign with OLD key (current key that controls the account)
-    return await signAndExecuteWithKMS(tx, kmsKeyId, publicKeyHex, client)
+    // Sign with OLD key first
+    const bodyBytes = (tx as any)._signedTransactions.list[0].bodyBytes
+    if (!bodyBytes) throw new Error('Failed to extract transaction body bytes')
+
+    const oldSig = await signTransaction(oldKmsKeyId, bodyBytes)
+    const oldHederaKey = compressPublicKey(oldPublicKeyHex)
+    tx.addSignature(oldHederaKey, oldSig.signature)
+
+    // Sign with NEW key (required by Hedera for key changes)
+    const newSig = await signTransaction(newKmsKeyId, bodyBytes)
+    tx.addSignature(newCompressedKey, newSig.signature)
+
+    // Execute
+    const response = await tx.execute(client)
+    const receipt = await response.getReceipt(client)
+
+    if (receipt.status.toString() !== 'SUCCESS') {
+      throw new Error(`Transaction failed with status: ${receipt.status.toString()}`)
+    }
+
+    return response.transactionId.toString()
   } finally {
     client.close()
   }
+}
+
+/** Compress a 65-byte uncompressed ECDSA public key to 33-byte compressed for Hedera. */
+function compressPublicKey(publicKeyHex: string): PublicKey {
+  const uncompressed = Buffer.from(publicKeyHex, 'hex')
+  const x = uncompressed.subarray(1, 33)
+  const y = uncompressed.subarray(33, 65)
+  const prefix = y[31] % 2 === 0 ? 0x02 : 0x03
+  const compressed = Buffer.alloc(33)
+  compressed[0] = prefix
+  x.copy(compressed, 1)
+  return PublicKey.fromBytesECDSA(compressed)
 }
 
 /**

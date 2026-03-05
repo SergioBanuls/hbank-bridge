@@ -22,6 +22,7 @@ import { createSigningKey, getPublicKeyHex, disableKMSKey } from '@/lib/kms/kms-
 import { signAndExecuteAccountUpdate } from '@/lib/kms/transaction-signer'
 import { deriveEvmAddress } from '@/lib/kms/evm-utils'
 import { supabaseAdmin } from '@/lib/supabase'
+import { getArbitrumProvider } from '@/lib/bridge/arbitrumRpc'
 import { ARBITRUM_CONFIG } from '@/lib/bridge/bridgeConstants'
 
 const ERC20_BALANCE_ABI = ['function balanceOf(address) view returns (uint256)']
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Check Arbitrum balances before rotating
     const evmAddress = deriveEvmAddress(ctx.publicKeyHex)
-    const provider = new ethers.providers.JsonRpcProvider(ARBITRUM_CONFIG.RPC_URL)
+    const provider = await getArbitrumProvider()
 
     const [ethBalance, usdcBalance] = await Promise.all([
       provider.getBalance(evmAddress),
@@ -64,11 +65,12 @@ export async function POST(request: NextRequest) {
     const newPublicKeyHex = await getPublicKeyHex(newKeyResult.keyId)
     const newEvmAddress = deriveEvmAddress(newPublicKeyHex)
 
-    // 5. Update Hedera account key (signed with OLD key)
+    // 5. Update Hedera account key (signed with BOTH old and new key)
     const txId = await signAndExecuteAccountUpdate(
       oldKmsKeyId,
       ctx.accountId,
       ctx.publicKeyHex,
+      newKeyResult.keyId,
       newPublicKeyHex,
     )
 
