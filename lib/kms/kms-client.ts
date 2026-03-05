@@ -13,7 +13,7 @@ import {
   DescribeKeyCommand,
   DisableKeyCommand,
 } from '@aws-sdk/client-kms'
-import { keccak_256 } from '@noble/hashes/sha3'
+import { keccak_256 } from '@noble/hashes/sha3.js'
 import { spkiToRawPublicKey, derToRawSignature } from './signature-utils'
 import type { KMSKeyInfo, KMSSignResult } from '@/types/kms'
 
