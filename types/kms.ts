@@ -51,6 +51,7 @@ export type KMSTransactionType =
   | 'bridge'
   | 'bridge_reverse'
   | 'transfer_evm'
+  | 'key_rotation'
 
 // API request types
 export interface CreateAccountRequest {
@@ -127,6 +128,25 @@ export interface AccountInfoResponse {
   } | null
   error?: string
 }
+
+// Key rotation response types
+export interface KeyRotationWarningResponse {
+  warning: true
+  message: string
+  balances: {
+    eth: string
+    usdc: string
+  }
+}
+
+export interface KeyRotationSuccessResponse {
+  success: true
+  newEvmAddress: string
+  hederaAccountId: string
+  transactionId: string
+}
+
+export type KeyRotationResponse = KeyRotationWarningResponse | KeyRotationSuccessResponse
 
 // KMS key creation result (internal)
 export interface KMSKeyInfo {

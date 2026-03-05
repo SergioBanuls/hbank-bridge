@@ -11,6 +11,7 @@ import {
   GetPublicKeyCommand,
   SignCommand,
   DescribeKeyCommand,
+  DisableKeyCommand,
 } from '@aws-sdk/client-kms'
 import { keccak_256 } from '@noble/hashes/sha3'
 import { spkiToRawPublicKey, derToRawSignature } from './signature-utils'
@@ -108,6 +109,15 @@ export async function signTransaction(
   const rawSignature = derToRawSignature(derSignature)
 
   return { signature: rawSignature }
+}
+
+/**
+ * Disable a KMS key (used after key rotation).
+ * The key is not deleted — preserved for audit trail.
+ */
+export async function disableKMSKey(keyId: string): Promise<void> {
+  const kms = getKMSClient()
+  await kms.send(new DisableKeyCommand({ KeyId: keyId }))
 }
 
 /**

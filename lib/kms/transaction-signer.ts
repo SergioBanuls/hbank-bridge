@@ -19,6 +19,7 @@ import {
   TokenAssociateTransaction,
   AccountAllowanceApproveTransaction,
   TransferTransaction,
+  AccountUpdateTransaction,
   TransactionId,
   AccountId,
   TokenId,
@@ -184,6 +185,46 @@ export async function signAndExecuteTransfer(
       .freezeWith(client)
 
     return await signAndExecuteWithKMS(frozenTx, kmsKeyId, publicKeyHex, client)
+  } finally {
+    client.close()
+  }
+}
+
+/**
+ * Build, sign, and execute an AccountUpdateTransaction to rotate the account key.
+ * Signs with the OLD key (current key that controls the account).
+ */
+export async function signAndExecuteAccountUpdate(
+  kmsKeyId: string,
+  accountId: string,
+  publicKeyHex: string,
+  newPublicKeyHex: string,
+): Promise<string> {
+  const client = getNetworkClient()
+
+  try {
+    const payer = AccountId.fromString(accountId)
+
+    // Build the compressed public key for the new key (65-byte uncompressed → 33-byte compressed)
+    const newPubKeyBytes = Buffer.from(newPublicKeyHex, 'hex')
+    const newCompressedKey = PublicKey.fromBytesECDSA(
+      newPubKeyBytes.length === 65
+        ? Buffer.concat([
+            Buffer.from([newPubKeyBytes[64] % 2 === 0 ? 0x02 : 0x03]),
+            newPubKeyBytes.subarray(1, 33),
+          ])
+        : newPubKeyBytes,
+    )
+
+    const tx = new AccountUpdateTransaction()
+      .setAccountId(payer)
+      .setKey(newCompressedKey)
+      .setTransactionId(TransactionId.generate(payer))
+      .setNodeAccountIds([DEFAULT_NODE])
+      .freezeWith(client)
+
+    // Sign with OLD key (current key that controls the account)
+    return await signAndExecuteWithKMS(tx, kmsKeyId, publicKeyHex, client)
   } finally {
     client.close()
   }
