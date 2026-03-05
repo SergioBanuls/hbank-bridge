@@ -54,8 +54,47 @@ const NETWORK_TABS = ['hedera', 'arbitrum'] as const
 type NetworkTab = (typeof NETWORK_TABS)[number]
 
 export default function PortfolioPage() {
-    const { isConnected, custodialAccountId, custodialEvmAddress, loading } = useConnectionContext()
+    const { isConnected, custodialAccountId, custodialEvmAddress, loading, session } = useConnectionContext()
     const [loginOpen, setLoginOpen] = useState(false)
+
+    // Key rotation state
+    const [isRotating, setIsRotating] = useState(false)
+    const [rotationWarning, setRotationWarning] = useState<{ eth: string; usdc: string } | null>(null)
+    const [showRotateConfirm, setShowRotateConfirm] = useState(false)
+    const [rotationSuccess, setRotationSuccess] = useState<string | null>(null)
+
+    const handleRotateKey = async () => {
+        if (!session?.access_token) return
+        setIsRotating(true)
+        setRotationWarning(null)
+        setRotationSuccess(null)
+
+        try {
+            const res = await fetch('/api/kms/rotate-key', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json',
+                },
+            })
+            const data = await res.json()
+
+            if (data.warning) {
+                setRotationWarning(data.balances)
+                setShowRotateConfirm(false)
+            } else if (data.success) {
+                setRotationSuccess(data.newEvmAddress)
+                setShowRotateConfirm(false)
+            } else {
+                throw new Error(data.error || 'Rotation failed')
+            }
+        } catch (err) {
+            console.error('Key rotation failed:', err)
+            alert('Key rotation failed. Please try again.')
+        } finally {
+            setIsRotating(false)
+        }
+    }
 
     // Use the real KMS-derived EVM address for Arbitrum balance fetching
     const evmAddress = custodialEvmAddress
@@ -175,21 +214,33 @@ export default function PortfolioPage() {
 
                 {/* ─── Addresses ─── */}
                 {isConnected && (custodialAccountId || custodialEvmAddress) && (
-                    <div className="bg-neutral-900 rounded-3xl p-6 flex flex-col sm:flex-row gap-4">
-                        {custodialAccountId && (
-                            <AddressCard
-                                label="Hedera"
-                                icon="/hedera-logo.png"
-                                address={custodialAccountId}
-                            />
-                        )}
-                        {custodialEvmAddress && (
-                            <AddressCard
-                                label="EVM (Arbitrum)"
-                                icon="/arbitrum-logo.png"
-                                address={custodialEvmAddress}
-                            />
-                        )}
+                    <div className="bg-neutral-900 rounded-3xl p-6 flex flex-col gap-4">
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            {custodialAccountId && (
+                                <AddressCard
+                                    label="Hedera"
+                                    icon="/hedera-logo.png"
+                                    address={custodialAccountId}
+                                />
+                            )}
+                            {custodialEvmAddress && (
+                                <AddressCard
+                                    label="EVM (Arbitrum)"
+                                    icon="/arbitrum-logo.png"
+                                    address={custodialEvmAddress}
+                                />
+                            )}
+                        </div>
+                        <button
+                            onClick={() => setShowRotateConfirm(true)}
+                            disabled={isRotating}
+                            className="flex items-center gap-2 self-start rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-sm text-yellow-400 transition-colors hover:bg-yellow-500/20 disabled:opacity-50"
+                        >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            {isRotating ? 'Rotating...' : 'Rotate Key'}
+                        </button>
                     </div>
                 )}
 
@@ -302,6 +353,84 @@ export default function PortfolioPage() {
                         ) : null}
                     </div>
                 </div>
+
+                {/* ─── Key Rotation Modals ─── */}
+                {showRotateConfirm && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                        <div className="mx-4 w-full max-w-md rounded-2xl border border-white/10 bg-zinc-900 p-6">
+                            <h3 className="text-lg font-semibold text-white">Rotate Signing Key</h3>
+                            <p className="mt-2 text-sm text-zinc-400">
+                                This will create a new cryptographic key in AWS KMS and update your Hedera account.
+                                Your Hedera account ID stays the same, but your EVM address will change.
+                            </p>
+                            <p className="mt-2 text-sm text-yellow-400">
+                                Make sure you have no funds on Arbitrum before rotating.
+                            </p>
+                            <div className="mt-4 flex gap-3">
+                                <button
+                                    onClick={() => setShowRotateConfirm(false)}
+                                    className="flex-1 rounded-lg border border-white/10 px-4 py-2 text-sm text-zinc-400 hover:bg-white/5"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleRotateKey}
+                                    disabled={isRotating}
+                                    className="flex-1 rounded-lg bg-yellow-500/20 px-4 py-2 text-sm text-yellow-400 hover:bg-yellow-500/30 disabled:opacity-50"
+                                >
+                                    {isRotating ? 'Rotating...' : 'Confirm Rotation'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {rotationWarning && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                        <div className="mx-4 w-full max-w-md rounded-2xl border border-red-500/20 bg-zinc-900 p-6">
+                            <h3 className="text-lg font-semibold text-red-400">Cannot Rotate Key</h3>
+                            <p className="mt-2 text-sm text-zinc-400">
+                                You have funds on Arbitrum that would become inaccessible after rotation.
+                                Bridge them back to Hedera first.
+                            </p>
+                            <div className="mt-3 rounded-lg bg-red-500/10 p-3">
+                                <p className="text-sm text-zinc-300">
+                                    <span className="text-zinc-500">ETH:</span> {rotationWarning.eth}
+                                </p>
+                                <p className="text-sm text-zinc-300">
+                                    <span className="text-zinc-500">USDC:</span> {rotationWarning.usdc}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setRotationWarning(null)}
+                                className="mt-4 w-full rounded-lg border border-white/10 px-4 py-2 text-sm text-zinc-400 hover:bg-white/5"
+                            >
+                                Got it
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {rotationSuccess && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                        <div className="mx-4 w-full max-w-md rounded-2xl border border-green-500/20 bg-zinc-900 p-6">
+                            <h3 className="text-lg font-semibold text-green-400">Key Rotated Successfully</h3>
+                            <p className="mt-2 text-sm text-zinc-400">
+                                Your signing key has been rotated. Your Hedera account remains the same.
+                            </p>
+                            <div className="mt-3 rounded-lg bg-green-500/10 p-3">
+                                <p className="text-xs text-zinc-500">New EVM Address</p>
+                                <p className="font-mono text-sm text-zinc-300">{rotationSuccess}</p>
+                            </div>
+                            <button
+                                onClick={() => setRotationSuccess(null)}
+                                className="mt-4 w-full rounded-lg bg-green-500/20 px-4 py-2 text-sm text-green-400 hover:bg-green-500/30"
+                            >
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     )
