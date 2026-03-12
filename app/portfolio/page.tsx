@@ -22,24 +22,32 @@ const NETWORK_CONFIG = {
     arbitrum: { label: 'Arbitrum', icon: '/arbitrum-logo.png', bgColor: 'bg-blue-500' },
 } as const
 
-// Format USD value with appropriate precision
+// Truncate to N decimals without rounding
+function truncDec(value: number, decimals: number = 2): string {
+    const factor = Math.pow(10, decimals)
+    return (Math.floor(value * factor) / factor).toFixed(decimals)
+}
+
+// Format USD value with appropriate precision (truncated, not rounded)
 function formatUsd(value: number): string {
     if (value === 0) return '$0.00'
     if (value < 0.01) return '<$0.01'
-    if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
+    if (value >= 1_000_000) return `$${truncDec(value / 1_000_000)}M`
     if (value >= 1_000) {
-        return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        const truncated = Math.floor(value * 100) / 100
+        return `$${truncated.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
     }
-    return `$${value.toFixed(2)}`
+    return `$${truncDec(value)}`
 }
 
-// Format token balance with sensible decimals
+// Format token balance with sensible decimals (truncated, not rounded)
 function formatBalance(value: number): string {
     if (value === 0) return '0'
     if (value < 0.0001) return '<0.0001'
-    if (value < 1) return value.toFixed(4)
-    if (value < 1000) return value.toFixed(2)
-    return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    if (value < 1) return truncDec(value, 4)
+    if (value < 1000) return truncDec(value)
+    const truncated = Math.floor(value * 100) / 100
+    return truncated.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 interface HederaAsset {

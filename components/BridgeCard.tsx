@@ -20,7 +20,7 @@ import {
   HEDERA_CONFIG,
 } from '@/lib/bridge/bridgeConstants'
 import { USDT0_HEDERA } from '@/lib/bridge/usdt0Constants'
-import { formatAmount } from '@/utils/amountValidation'
+import { formatAmount, truncateBalance } from '@/utils/amountValidation'
 
 type BridgeToken = 'USDC' | 'USDT0'
 
@@ -139,9 +139,9 @@ export function BridgeCard() {
       .then(data => {
         if (data.success) {
           setCustodialEvmBalance({
-            usdc: (parseInt(data.usdcBalance || '0') / 1_000_000).toFixed(2),
-            usdt0: (parseInt(data.usdt0Balance || '0') / 1_000_000).toFixed(2),
-            eth: (parseInt(data.ethBalance || '0') / 1e18).toFixed(4),
+            usdc: truncateBalance(parseInt(data.usdcBalance || '0') / 1_000_000),
+            usdt0: truncateBalance(parseInt(data.usdt0Balance || '0') / 1_000_000),
+            eth: truncateBalance(parseInt(data.ethBalance || '0') / 1e18, 4),
           })
         }
       })
@@ -175,9 +175,9 @@ export function BridgeCard() {
       const res = await fetch(`/api/bridge/arbitrum-balance?address=${addr}`)
       const data = await res.json()
       if (data.success) {
-        const usdcFormatted = (parseInt(data.usdcBalance || '0') / 1_000_000).toFixed(2)
-        const usdt0Formatted = (parseInt(data.usdt0Balance || '0') / 1_000_000).toFixed(2)
-        const ethFormatted = (parseInt(data.ethBalance || '0') / 1e18).toFixed(4)
+        const usdcFormatted = truncateBalance(parseInt(data.usdcBalance || '0') / 1_000_000)
+        const usdt0Formatted = truncateBalance(parseInt(data.usdt0Balance || '0') / 1_000_000)
+        const ethFormatted = truncateBalance(parseInt(data.ethBalance || '0') / 1e18, 4)
         setEvmBalance({ usdc: usdcFormatted, usdt0: usdt0Formatted, eth: ethFormatted })
       }
     } catch {
@@ -203,9 +203,9 @@ export function BridgeCard() {
           .then(data => {
             if (data.success) {
               setEvmBalance({
-                usdc: (parseInt(data.usdcBalance || '0') / 1_000_000).toFixed(2),
-                usdt0: (parseInt(data.usdt0Balance || '0') / 1_000_000).toFixed(2),
-                eth: (parseInt(data.ethBalance || '0') / 1e18).toFixed(4),
+                usdc: truncateBalance(parseInt(data.usdcBalance || '0') / 1_000_000),
+                usdt0: truncateBalance(parseInt(data.usdt0Balance || '0') / 1_000_000),
+                eth: truncateBalance(parseInt(data.ethBalance || '0') / 1e18, 4),
               })
             }
           })
@@ -286,7 +286,7 @@ export function BridgeCard() {
           })
           const data = await res.json()
           if (data.success) {
-            setLzFeeEstimate(`${parseFloat(data.nativeFeeHbar).toFixed(2)} HBAR`)
+            setLzFeeEstimate(`${truncateBalance(parseFloat(data.nativeFeeHbar))} HBAR`)
           }
         } else {
           const res = await fetch('/api/bridge/quote-v3-reverse', {
@@ -296,7 +296,7 @@ export function BridgeCard() {
           })
           const data = await res.json()
           if (data.success) {
-            setLzFeeEstimate(`${parseFloat(data.nativeFeeEth).toFixed(6)} ETH`)
+            setLzFeeEstimate(`${truncateBalance(parseFloat(data.nativeFeeEth), 6)} ETH`)
           }
         }
       } catch {
@@ -470,7 +470,7 @@ export function BridgeCard() {
                   }
                   const poolMax = selectedToken === 'USDT0' ? Infinity : (parseFloat(liquidity.availableBalance) || 0)
                   const maxAmount = Math.min(poolMax, userMax)
-                  const value = (maxAmount * pct / 100).toFixed(2)
+                  const value = truncateBalance(maxAmount * pct / 100)
                   setAmount(value)
                 }}
                 disabled={bridge.isExecuting || liquidity.loading}
@@ -502,7 +502,7 @@ export function BridgeCard() {
                 ) : activeHederaBalance !== null ? (
                   <>
                     Bal: <span className={`font-semibold ${hasInsufficientHederaBalance ? 'text-red-400' : 'text-white/70'}`}>
-                      {parseFloat(activeHederaBalance).toFixed(2)} {selectedToken}
+                      {truncateBalance(parseFloat(activeHederaBalance))} {selectedToken}
                     </span>
                   </>
                 ) : (
@@ -546,7 +546,7 @@ export function BridgeCard() {
       {hasInsufficientHederaBalance && (
         <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 p-2.5 rounded-2xl mt-3">
           <Info className="w-3.5 h-3.5 flex-shrink-0" />
-          <span>Insufficient {selectedToken} balance. You have {parseFloat(activeHederaBalance!).toFixed(2)} {selectedToken}.</span>
+          <span>Insufficient {selectedToken} balance. You have {truncateBalance(parseFloat(activeHederaBalance!))} {selectedToken}.</span>
         </div>
       )}
 
@@ -560,7 +560,7 @@ export function BridgeCard() {
       {direction === 'hedera_to_arbitrum' && isConnected && hbarBalance < 1 && !hederaBalancesLoading && (
         <div className="flex items-center gap-2 text-yellow-500 text-xs bg-yellow-500/10 p-2.5 rounded-2xl mt-3">
           <Info className="w-3.5 h-3.5 flex-shrink-0" />
-          <span>Low HBAR balance ({hbarBalance.toFixed(2)} HBAR). You need HBAR to pay bridge fees (~5-15 HBAR).</span>
+          <span>Low HBAR balance ({truncateBalance(hbarBalance)} HBAR). You need HBAR to pay bridge fees (~5-15 HBAR).</span>
         </div>
       )}
 
@@ -748,7 +748,7 @@ export function BridgeCard() {
           {selectedToken === 'USDC' && (
             <div className="flex justify-between">
               <span className="text-white/40">Bridge fee ({BRIDGE_FEES.FEE_BASIS_POINTS / 100}%)</span>
-              <span className="text-white/70">{feeAmount.toFixed(2)} USDC</span>
+              <span className="text-white/70">{truncateBalance(feeAmount)} USDC</span>
             </div>
           )}
           <div className="flex justify-between">
@@ -761,7 +761,7 @@ export function BridgeCard() {
           </div>
           <div className="flex justify-between border-t border-white/5 pt-2 font-medium">
             <span className="text-white/70">You Receive</span>
-            <span className="text-green-400">{effectiveAmountAfterFee.toFixed(2)} {selectedToken}</span>
+            <span className="text-green-400">{truncateBalance(effectiveAmountAfterFee)} {selectedToken}</span>
           </div>
         </div>
       )}
@@ -801,7 +801,7 @@ export function BridgeCard() {
             ) : !hasEnoughEvmBalance ? (
               `Insufficient ${selectedToken}`
             ) : (
-              `Bridge ${amountFloat > 0 ? amountFloat.toFixed(2) + ' ' : ''}${selectedToken}`
+              `Bridge ${amountFloat > 0 ? truncateBalance(amountFloat) + ' ' : ''}${selectedToken}`
             )}
           </button>
         )}

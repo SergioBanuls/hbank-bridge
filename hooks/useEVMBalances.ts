@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ethers } from 'ethers'
+import { truncateBalance } from '@/utils/amountValidation'
 
 interface EVMBalances {
     eth: string
@@ -53,8 +54,8 @@ export function useEVMBalances(evmAddress: string | null): EVMBalances {
                 const data = await balanceRes.json()
                 if (data.success) {
                     setEth(ethers.utils.formatEther(data.ethBalance))
-                    setUsdc((parseInt(data.usdcBalance) / 1e6).toFixed(6))
-                    setUsdt0((parseInt(data.usdt0Balance || '0') / 1e6).toFixed(6))
+                    setUsdc(truncateBalance(parseInt(data.usdcBalance) / 1e6))
+                    setUsdt0(truncateBalance(parseInt(data.usdt0Balance || '0') / 1e6))
                 }
             }
 

@@ -20,6 +20,7 @@ import {
 } from '@/lib/bridge/bridgeConstants'
 import { fetchBridgeQuoteV3 } from '@/lib/bridge/bridgeTransactionBuilder'
 import { fetchUsdt0Quote } from '@/lib/bridge/usdt0TransactionBuilder'
+import { truncateBalance } from '@/utils/amountValidation'
 
 interface BridgeState {
   status: BridgeStatus
@@ -372,7 +373,7 @@ export function useBridge() {
         if (balData.success) {
           const usdcBalance = BigInt(balData.usdcBalance || '0')
           if (usdcBalance < BigInt(amountRaw)) {
-            const balanceUsdc = (Number(usdcBalance) / 1_000_000).toFixed(2)
+            const balanceUsdc = truncateBalance(Number(usdcBalance) / 1_000_000)
             setError(`Insufficient USDC on Arbitrum. You have ${balanceUsdc} USDC but need ${amountUsdc} USDC.`)
             return
           }

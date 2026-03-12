@@ -120,6 +120,15 @@ export function formatAmount(amount: string, decimals: number): string {
 }
 
 /**
+ * Truncate a number to a fixed number of decimal places WITHOUT rounding.
+ * e.g. truncateBalance(1.999, 2) => "1.99", truncateBalance(0.456, 2) => "0.45"
+ */
+export function truncateBalance(value: number, decimals: number = 2): string {
+  const factor = Math.pow(10, decimals)
+  return (Math.floor(value * factor) / factor).toFixed(decimals)
+}
+
+/**
  * Validate that an input string only contains valid numeric characters
  *
  * @param value - Input string to validate

@@ -6,7 +6,7 @@ import { useCustodialConnection } from '@/hooks/useCustodialConnection'
 import { useTokenBalances } from '@/hooks/useTokenBalances'
 import { useEVMBalances } from '@/hooks/useEVMBalances'
 import { useTokens } from '@/hooks/useTokens'
-import { formatAmount } from '@/utils/amountValidation'
+import { formatAmount, truncateBalance } from '@/utils/amountValidation'
 import { Token } from '@/types/token'
 import Image from 'next/image'
 import { ArrowUpRight, CheckCircle2, ExternalLink, AlertCircle, Send, Copy, Check, ChevronDown } from 'lucide-react'
@@ -75,9 +75,9 @@ export default function TransferPage() {
   const formattedBalance = useMemo(() => {
     if (!selectedToken) return null
     if (isArbitrum) {
-      if (selectedToken.address === 'arb:eth') return parseFloat(evmEth).toFixed(6)
-      if (selectedToken.address === 'arb:usdc') return parseFloat(evmUsdc).toFixed(2)
-      if (selectedToken.address === 'arb:usdt0') return parseFloat(evmUsdt0).toFixed(2)
+      if (selectedToken.address === 'arb:eth') return truncateBalance(parseFloat(evmEth), 6)
+      if (selectedToken.address === 'arb:usdc') return truncateBalance(parseFloat(evmUsdc))
+      if (selectedToken.address === 'arb:usdt0') return truncateBalance(parseFloat(evmUsdt0))
       return null
     }
     const balanceKey = isHbar ? 'HBAR' : selectedToken.address
@@ -95,11 +95,11 @@ export default function TransferPage() {
       if (selectedToken.address === 'arb:eth') {
         const bal = parseFloat(evmEth)
         const reserve = 0.0005 // ETH gas reserve
-        setAmount(Math.max(bal - reserve, 0).toFixed(6))
+        setAmount(truncateBalance(Math.max(bal - reserve, 0), 6))
       } else if (selectedToken.address === 'arb:usdc') {
-        setAmount(parseFloat(evmUsdc).toFixed(2))
+        setAmount(truncateBalance(parseFloat(evmUsdc)))
       } else if (selectedToken.address === 'arb:usdt0') {
-        setAmount(parseFloat(evmUsdt0).toFixed(2))
+        setAmount(truncateBalance(parseFloat(evmUsdt0)))
       }
       return
     }
@@ -420,7 +420,7 @@ export default function TransferPage() {
                         </div>
                         {formattedBalance && (
                           <span className='text-xs text-white/40 shrink-0'>
-                            {parseFloat(formattedBalance).toFixed(4)}
+                            {truncateBalance(parseFloat(formattedBalance))}
                           </span>
                         )}
                       </>
@@ -454,8 +454,8 @@ export default function TransferPage() {
                           filteredTokens.map(token => {
                             let fmtBal = '0'
                             if (isArbitrum) {
-                              if (token.address === 'arb:eth') fmtBal = parseFloat(evmEth).toFixed(6)
-                              else if (token.address === 'arb:usdc') fmtBal = parseFloat(evmUsdc).toFixed(2)
+                              if (token.address === 'arb:eth') fmtBal = truncateBalance(parseFloat(evmEth), 6)
+                              else if (token.address === 'arb:usdc') fmtBal = truncateBalance(parseFloat(evmUsdc))
                             } else {
                               const key = token.address === '' ? 'HBAR' : token.address
                               const tokenBal = balances[key]
@@ -484,7 +484,7 @@ export default function TransferPage() {
                                   <p className='text-[11px] text-white/30 truncate'>{token.name}</p>
                                 </div>
                                 <div className='text-right shrink-0'>
-                                  <p className='text-sm text-white/70 font-medium'>{parseFloat(fmtBal).toFixed(4)}</p>
+                                  <p className='text-sm text-white/70 font-medium'>{truncateBalance(parseFloat(fmtBal))}</p>
                                   {token.address && (
                                     <p className='text-[11px] text-white/30 font-mono'>{token.address}</p>
                                   )}
@@ -530,7 +530,7 @@ export default function TransferPage() {
                       ) : formattedBalance !== null ? (
                         <>
                           <span className='text-[11px] text-white/30'>
-                            Bal: <span className='text-white/50 font-medium'>{parseFloat(formattedBalance).toFixed(4)}</span>
+                            Bal: <span className='text-white/50 font-medium'>{truncateBalance(parseFloat(formattedBalance))}</span>
                           </span>
                           <button
                             type='button'
