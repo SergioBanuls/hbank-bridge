@@ -16,6 +16,7 @@ import {
   Client,
   ContractExecuteTransaction,
   ContractFunctionParameters,
+  ContractId,
   TokenAssociateTransaction,
   AccountAllowanceApproveTransaction,
   TransferTransaction,
@@ -28,7 +29,7 @@ import {
 } from '@hashgraph/sdk'
 
 import { signTransaction } from './kms-client'
-import type { SignAssociateRequest, SignApproveRequest, SignTransferRequest, SignBridgeRequest } from '@/types/kms'
+import type { SignAssociateRequest, SignApproveRequest, SignTransferRequest, SignBridgeRequest, SignBridgeUsdt0Request } from '@/types/kms'
 
 const NETWORK = process.env.NEXT_PUBLIC_HEDERA_NETWORK || 'mainnet'
 const DEFAULT_NODE = AccountId.fromString('0.0.3')
@@ -348,6 +349,128 @@ export async function signAndExecuteBridge(
     const frozenTx = transaction.freezeWith(client)
 
     return await signAndExecuteWithKMS(frozenTx, kmsKeyId, publicKeyHex, client)
+  } finally {
+    client.close()
+  }
+}
+
+/**
+ * Build, sign, and execute USDT0 token approval for OFT contract via KMS.
+ */
+export async function signAndExecuteUsdt0Approval(
+  amount: string,
+  accountId: string,
+  kmsKeyId: string,
+  publicKeyHex: string
+): Promise<string> {
+  const client = getNetworkClient()
+
+  try {
+    const payer = AccountId.fromString(accountId)
+    const usdt0TokenId = '0.0.10282787'
+    // OFT contract on Hedera — long-form EVM address
+    const oftContractId = ContractId.fromEvmAddress(0, 0, '0xe3119e23fC2371d1E6b01775ba312035425A53d6')
+
+    const amountFloat = parseFloat(amount)
+    const amountRaw = Math.floor(amountFloat * 1_000_000)
+    const approvalAmount = amountRaw * 10 // 10x for future transactions
+
+    const transaction = new AccountAllowanceApproveTransaction()
+      .setTransactionId(TransactionId.generate(payer))
+      .approveTokenAllowance(
+        TokenId.fromString(usdt0TokenId),
+        payer,
+        AccountId.fromString(oftContractId.toString()),
+        approvalAmount
+      )
+      .setNodeAccountIds([DEFAULT_NODE])
+      .freezeWith(client)
+
+    return await signAndExecuteWithKMS(transaction, kmsKeyId, publicKeyHex, client)
+  } finally {
+    client.close()
+  }
+}
+
+/**
+ * Build, sign, and execute USDT0 OFT send() for cross-chain bridge via KMS.
+ *
+ * Uses raw ABI encoding via ethers since OFT.send() takes complex struct params
+ * that ContractFunctionParameters cannot easily encode.
+ */
+export async function signAndExecuteUsdt0Bridge(
+  params: SignBridgeUsdt0Request,
+  accountId: string,
+  kmsKeyId: string,
+  publicKeyHex: string
+): Promise<string> {
+  const { ethers } = await import('ethers')
+  const { OFT_ABI, USDT0_LZ_CONFIG, USDT0_GAS_CONFIG, buildSendParam } = await import('@/lib/bridge/usdt0Constants')
+  const { accountIdToEvmAddress } = await import('@/lib/bridge/bridgeConstants')
+
+  const client = getNetworkClient()
+
+  try {
+    const payer = AccountId.fromString(accountId)
+    const amountFloat = parseFloat(params.amount)
+    const amountRaw = Math.floor(amountFloat * 1_000_000)
+
+    // Build OFT SendParam
+    const sendParam = buildSendParam(
+      USDT0_LZ_CONFIG.ARBITRUM_EID,
+      params.receiverAddress,
+      amountRaw,
+      params.requestGasDrop
+    )
+
+    // Convert LZ fee from HBAR to tinybar, then to weibar for msg.value
+    // Hedera EVM uses weibar (18 decimals): HBAR * 1e18 = weibar
+    // But setPayableAmount expects HBAR, so just add 20% buffer in HBAR
+    const feeWithBuffer = Math.ceil(params.lzFeeHbar * 1.2 * 100) / 100
+
+    // Build MessagingFee struct (nativeFee in weibar, lzTokenFee = 0)
+    // quoteSend returns weibar on Hedera EVM, pass it through
+    const nativeFeeWeibar = BigInt(Math.floor(params.lzFeeHbar * 1e18))
+    const messagingFee = {
+      nativeFee: nativeFeeWeibar.toString(),
+      lzTokenFee: 0,
+    }
+
+    // Refund address = sender's EVM address (derived from Hedera account)
+    const refundAddress = accountIdToEvmAddress(accountId)
+
+    // Encode the full calldata via ethers ABI
+    const iface = new ethers.utils.Interface(OFT_ABI)
+    const calldata = iface.encodeFunctionData('send', [
+      [
+        sendParam.dstEid,
+        sendParam.to,
+        sendParam.amountLD,
+        sendParam.minAmountLD,
+        sendParam.extraOptions,
+        sendParam.composeMsg,
+        sendParam.oftCmd,
+      ],
+      [messagingFee.nativeFee, messagingFee.lzTokenFee],
+      refundAddress,
+    ])
+
+    // Use raw function parameters (includes 4-byte selector)
+    const calldataBytes = Buffer.from(calldata.slice(2), 'hex')
+
+    // OFT contract on Hedera — long-form EVM address
+    const oftContractId = ContractId.fromEvmAddress(0, 0, '0xe3119e23fC2371d1E6b01775ba312035425A53d6')
+
+    const transaction = new ContractExecuteTransaction()
+      .setTransactionId(TransactionId.generate(payer))
+      .setContractId(oftContractId)
+      .setGas(USDT0_GAS_CONFIG.HEDERA_OFT_SEND_GAS)
+      .setFunctionParameters(calldataBytes)
+      .setPayableAmount(new Hbar(feeWithBuffer))
+      .setNodeAccountIds([DEFAULT_NODE])
+      .freezeWith(client)
+
+    return await signAndExecuteWithKMS(transaction, kmsKeyId, publicKeyHex, client)
   } finally {
     client.close()
   }
