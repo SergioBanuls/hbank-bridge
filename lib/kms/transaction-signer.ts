@@ -368,8 +368,8 @@ export async function signAndExecuteUsdt0Approval(
   try {
     const payer = AccountId.fromString(accountId)
     const usdt0TokenId = '0.0.10282787'
-    // OFT contract on Hedera — long-form EVM address
-    const oftContractId = ContractId.fromEvmAddress(0, 0, '0xe3119e23fC2371d1E6b01775ba312035425A53d6')
+    // OFT contract on Hedera: 0.0.10282786 (EVM: 0xe3119e23fC2371d1E6b01775ba312035425A53d6)
+    const oftAccountId = '0.0.10282786'
 
     const amountFloat = parseFloat(amount)
     const amountRaw = Math.floor(amountFloat * 1_000_000)
@@ -380,7 +380,7 @@ export async function signAndExecuteUsdt0Approval(
       .approveTokenAllowance(
         TokenId.fromString(usdt0TokenId),
         payer,
-        AccountId.fromString(oftContractId.toString()),
+        AccountId.fromString(oftAccountId),
         approvalAmount
       )
       .setNodeAccountIds([DEFAULT_NODE])
