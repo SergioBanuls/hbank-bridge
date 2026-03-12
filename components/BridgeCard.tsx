@@ -8,6 +8,8 @@ import { TokenSelector } from './TokenSelector'
 import { useConnectionContext } from '@/contexts/ConnectionContext'
 import { useBridge } from '@/hooks/useBridge'
 import { useTokenBalances } from '@/hooks/useTokenBalances'
+import { useCheckUserTokenAssociation } from '@/hooks/useCheckUserTokenAssociation'
+import { useAssociateToken } from '@/hooks/useAssociateToken'
 import { BridgeStatusTracker } from './BridgeStatusTracker'
 import {
   BridgeDirection,
@@ -97,6 +99,22 @@ export function BridgeCard() {
     : null
   const rawHbarBalance = hederaBalances['HBAR']
   const hbarBalance = rawHbarBalance ? parseInt(rawHbarBalance) / 1e8 : 0
+
+  // USDT0 auto-association: check and associate when user selects USDT0
+  const usdt0TokenId = selectedToken === 'USDT0' ? USDT0_HEDERA.TOKEN_ID : null
+  const { isAssociated: isUsdt0Associated, isChecking: isCheckingAssoc, refresh: refreshAssoc } = useCheckUserTokenAssociation(
+    isConnected ? account : null,
+    usdt0TokenId
+  )
+  const { associateToken, isAssociating } = useAssociateToken()
+
+  // Auto-associate USDT0 when selected and not yet associated
+  useEffect(() => {
+    if (selectedToken !== 'USDT0' || !isConnected || isCheckingAssoc || isUsdt0Associated || isAssociating) return
+    associateToken(USDT0_HEDERA.TOKEN_ID).then((success) => {
+      if (success) refreshAssoc()
+    })
+  }, [selectedToken, isConnected, isCheckingAssoc, isUsdt0Associated, isAssociating, associateToken, refreshAssoc])
 
   // Active balance based on selected token
   const activeHederaBalance = selectedToken === 'USDT0' ? formattedUsdt0Balance : formattedUsdcBalance
@@ -393,6 +411,14 @@ export function BridgeCard() {
           </button>
         ))}
       </div>
+
+      {/* USDT0 association status */}
+      {selectedToken === 'USDT0' && isConnected && (isAssociating || isCheckingAssoc) && (
+        <div className="flex items-center gap-2 text-blue-400 text-xs bg-blue-500/10 p-2.5 rounded-2xl mb-3">
+          <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+          <span>{isAssociating ? 'Associating USDT0 to your account...' : 'Checking USDT0 association...'}</span>
+        </div>
+      )}
 
       {/* Token selectors — side by side */}
       <div className="relative flex items-center gap-0">
