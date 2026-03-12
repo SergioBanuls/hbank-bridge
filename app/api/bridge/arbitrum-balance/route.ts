@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ethers } from 'ethers'
 import { getArbitrumProvider } from '@/lib/bridge/arbitrumRpc'
+import { USDT0_ARBITRUM } from '@/lib/bridge/usdt0Constants'
 
 const ARBITRUM_USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
 const ERC20_ABI = ['function balanceOf(address account) view returns (uint256)']
@@ -39,17 +40,22 @@ export async function GET(request: NextRequest) {
 
         const provider = await getArbitrumProvider()
 
-        const [ethBalance, usdcBalance] = await Promise.all([
+        const [ethBalance, usdcBalance, usdt0Balance] = await Promise.all([
             provider.getBalance(address),
             (async () => {
                 const usdcContract = new ethers.Contract(ARBITRUM_USDC, ERC20_ABI, provider)
                 return usdcContract.balanceOf(address)
+            })(),
+            (async () => {
+                const usdt0Contract = new ethers.Contract(USDT0_ARBITRUM.TOKEN_ADDRESS, ERC20_ABI, provider)
+                return usdt0Contract.balanceOf(address)
             })(),
         ])
 
         return NextResponse.json({
             success: true,
             usdcBalance: usdcBalance.toString(),
+            usdt0Balance: usdt0Balance.toString(),
             ethBalance: ethBalance.toString(),
         }, { headers: securityHeaders })
     } catch (error) {
