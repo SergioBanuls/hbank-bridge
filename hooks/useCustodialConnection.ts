@@ -110,6 +110,38 @@ export function useCustodialConnection() {
     })
   }
 
+  /**
+   * Sign and execute a USDT0 bridge (Hedera -> Arbitrum) via KMS + OFT.
+   */
+  const signBridgeUsdt0 = async (
+    amount: string,
+    receiverAddress: string,
+    requestGasDrop: boolean,
+    lzFeeHbar: number
+  ) => {
+    if (!token) throw new Error('Not authenticated')
+    return custodialFetch('/api/kms/sign-bridge-usdt0', token, {
+      amount,
+      receiverAddress,
+      requestGasDrop,
+      lzFeeHbar,
+    })
+  }
+
+  /**
+   * Sign and execute a USDT0 reverse bridge (Arbitrum -> Hedera) via KMS + OFT.
+   */
+  const signBridgeUsdt0Reverse = async (
+    amount: string,
+    requestGasDrop?: boolean
+  ) => {
+    if (!token) throw new Error('Not authenticated')
+    return custodialFetch('/api/kms/sign-bridge-usdt0-reverse', token, {
+      amount,
+      requestGasDrop: requestGasDrop || false,
+    })
+  }
+
   return {
     custodialAccountId,
     signAssociate,
@@ -117,5 +149,7 @@ export function useCustodialConnection() {
     signTransfer,
     signBridge,
     signBridgeReverse,
+    signBridgeUsdt0,
+    signBridgeUsdt0Reverse,
   }
 }
