@@ -13,6 +13,7 @@ import { validateSigningRequest, recordSigningOperation, AuthError } from '@/lib
 import { createArbitrumKMSSigner } from '@/lib/kms/evm-signer'
 import { deriveEvmAddress } from '@/lib/kms/evm-utils'
 import { ARBITRUM_CONFIG } from '@/lib/bridge/bridgeConstants'
+import { USDT0_ARBITRUM } from '@/lib/bridge/usdt0Constants'
 
 const ERC20_ABI = [
   'function transfer(address to, uint256 amount) returns (bool)',
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
     ctx = await validateSigningRequest(request)
 
     const body = await request.json()
-    const { to, amount, token } = body as { to: string; amount: string; token: 'eth' | 'usdc' }
+    const { to, amount, token } = body as { to: string; amount: string; token: 'eth' | 'usdc' | 'usdt0' }
 
     if (!to || !amount || !token) {
       return NextResponse.json(
@@ -80,14 +81,16 @@ export async function POST(request: NextRequest) {
       })
       receipt = await tx.wait()
     } else {
-      // USDC ERC-20 transfer
+      // ERC-20 transfer (USDC or USDT0)
+      const tokenAddress = token === 'usdt0' ? USDT0_ARBITRUM.TOKEN_ADDRESS : ARBITRUM_CONFIG.USDC_ADDRESS
+      const tokenSymbol = token === 'usdt0' ? 'USDT0' : 'USDC'
       const amountRaw = Math.floor(amountFloat * 1_000_000) // 6 decimals
 
-      const usdcContract = new ethers.Contract(ARBITRUM_CONFIG.USDC_ADDRESS, ERC20_ABI, provider)
-      const balance = await usdcContract.balanceOf(evmAddress)
+      const erc20Contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider)
+      const balance = await erc20Contract.balanceOf(evmAddress)
       if (balance.lt(amountRaw)) {
         return NextResponse.json(
-          { success: false, error: `Insufficient USDC. Have: ${ethers.utils.formatUnits(balance, 6)}, need: ${amount}` },
+          { success: false, error: `Insufficient ${tokenSymbol}. Have: ${ethers.utils.formatUnits(balance, 6)}, need: ${amount}` },
           { status: 400 }
         )
       }
@@ -101,8 +104,8 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const usdcWithSigner = usdcContract.connect(signer)
-      const tx = await usdcWithSigner.transfer(to, amountRaw, { gasLimit: 100_000 })
+      const erc20WithSigner = erc20Contract.connect(signer)
+      const tx = await erc20WithSigner.transfer(to, amountRaw, { gasLimit: 100_000 })
       receipt = await tx.wait()
     }
 

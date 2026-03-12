@@ -6,6 +6,7 @@ import { ethers } from 'ethers'
 interface EVMBalances {
     eth: string
     usdc: string
+    usdt0: string
     ethPriceUsd: number
     isLoading: boolean
 }
@@ -28,6 +29,7 @@ async function fetchEthPrice(): Promise<number> {
 export function useEVMBalances(evmAddress: string | null): EVMBalances {
     const [eth, setEth] = useState('0')
     const [usdc, setUsdc] = useState('0')
+    const [usdt0, setUsdt0] = useState('0')
     const [ethPriceUsd, setEthPriceUsd] = useState(0)
     const [isLoading, setIsLoading] = useState(false)
 
@@ -35,6 +37,7 @@ export function useEVMBalances(evmAddress: string | null): EVMBalances {
         if (!evmAddress) {
             setEth('0')
             setUsdc('0')
+            setUsdt0('0')
             return
         }
 
@@ -51,6 +54,7 @@ export function useEVMBalances(evmAddress: string | null): EVMBalances {
                 if (data.success) {
                     setEth(ethers.utils.formatEther(data.ethBalance))
                     setUsdc((parseInt(data.usdcBalance) / 1e6).toFixed(6))
+                    setUsdt0((parseInt(data.usdt0Balance || '0') / 1e6).toFixed(6))
                 }
             }
 
@@ -72,5 +76,5 @@ export function useEVMBalances(evmAddress: string | null): EVMBalances {
         return () => clearInterval(interval)
     }, [evmAddress, fetchBalances])
 
-    return { eth, usdc, ethPriceUsd, isLoading }
+    return { eth, usdc, usdt0, ethPriceUsd, isLoading }
 }

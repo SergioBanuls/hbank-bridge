@@ -17,7 +17,7 @@ export default function TransferPage() {
   const { isConnected, connectionMode, account, custodialEvmAddress, session } = useConnectionContext()
   const { signTransfer } = useCustodialConnection()
   const { balances, loading: balancesLoading } = useTokenBalances(account || null)
-  const { eth: evmEth, usdc: evmUsdc, ethPriceUsd, isLoading: evmLoading } = useEVMBalances(custodialEvmAddress)
+  const { eth: evmEth, usdc: evmUsdc, usdt0: evmUsdt0, ethPriceUsd, isLoading: evmLoading } = useEVMBalances(custodialEvmAddress)
   const { data: allTokens } = useTokens()
 
   const [network, setNetwork] = useState<NetworkTab>('hedera')
@@ -39,6 +39,7 @@ export default function TransferPage() {
   const arbTokens = useMemo<Token[]>(() => [
     { symbol: 'ETH', name: 'Ethereum', address: 'arb:eth', decimals: 18, icon: '/EthLogo.png' } as Token,
     { symbol: 'USDC', name: 'USD Coin', address: 'arb:usdc', decimals: 6, icon: 'https://dwk1opv266jxs.cloudfront.net/icons/tokens/0.0.456858.png' } as Token,
+    { symbol: 'USDT0', name: 'Tether (OFT)', address: 'arb:usdt0', decimals: 6, icon: 'https://assets.coingecko.com/coins/images/325/small/Tether.png' } as Token,
   ], [])
 
   // All tokens (including HBAR) with balance > 0
@@ -47,6 +48,7 @@ export default function TransferPage() {
       const list: Token[] = []
       if (parseFloat(evmEth) > 0) list.push(arbTokens[0])
       if (parseFloat(evmUsdc) > 0) list.push(arbTokens[1])
+      if (parseFloat(evmUsdt0) > 0) list.push(arbTokens[2])
       // Show all if no balance yet (still loading)
       if (list.length === 0 && evmLoading) return arbTokens
       return list.length > 0 ? list : arbTokens
@@ -57,7 +59,7 @@ export default function TransferPage() {
       const raw = balances[key]
       return raw && BigInt(raw) > BigInt(0)
     })
-  }, [allTokens, balances, isArbitrum, evmEth, evmUsdc, evmLoading, arbTokens])
+  }, [allTokens, balances, isArbitrum, evmEth, evmUsdc, evmUsdt0, evmLoading, arbTokens])
 
   const filteredTokens = useMemo(() => {
     if (!tokenSearch) return tokensWithBalance
@@ -75,12 +77,13 @@ export default function TransferPage() {
     if (isArbitrum) {
       if (selectedToken.address === 'arb:eth') return parseFloat(evmEth).toFixed(6)
       if (selectedToken.address === 'arb:usdc') return parseFloat(evmUsdc).toFixed(2)
+      if (selectedToken.address === 'arb:usdt0') return parseFloat(evmUsdt0).toFixed(2)
       return null
     }
     const balanceKey = isHbar ? 'HBAR' : selectedToken.address
     const rawBalance = balances[balanceKey]
     return rawBalance ? formatAmount(rawBalance, selectedToken.decimals) : null
-  }, [selectedToken, isArbitrum, evmEth, evmUsdc, isHbar, balances])
+  }, [selectedToken, isArbitrum, evmEth, evmUsdc, evmUsdt0, isHbar, balances])
 
   const rawBalance = selectedToken && !isArbitrum
     ? balances[isHbar ? 'HBAR' : selectedToken.address]
@@ -95,6 +98,8 @@ export default function TransferPage() {
         setAmount(Math.max(bal - reserve, 0).toFixed(6))
       } else if (selectedToken.address === 'arb:usdc') {
         setAmount(parseFloat(evmUsdc).toFixed(2))
+      } else if (selectedToken.address === 'arb:usdt0') {
+        setAmount(parseFloat(evmUsdt0).toFixed(2))
       }
       return
     }
@@ -153,7 +158,7 @@ export default function TransferPage() {
           throw new Error('Invalid Ethereum address (0x...)')
         }
 
-        const token = selectedToken.address === 'arb:eth' ? 'eth' : 'usdc'
+        const token = selectedToken.address === 'arb:eth' ? 'eth' : selectedToken.address === 'arb:usdt0' ? 'usdt0' : 'usdc'
         const res = await fetch('/api/kms/sign-transfer-evm', {
           method: 'POST',
           headers: {
