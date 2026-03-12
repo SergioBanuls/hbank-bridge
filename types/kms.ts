@@ -50,6 +50,8 @@ export type KMSTransactionType =
   | 'transfer'
   | 'bridge'
   | 'bridge_reverse'
+  | 'bridge_usdt0'
+  | 'bridge_usdt0_reverse'
   | 'transfer_evm'
   | 'key_rotation'
 
@@ -110,6 +112,18 @@ export interface SignBridgeRequest {
   receiverAddress: string // Destination address on Arbitrum (0x...)
   requestGasDrop: boolean
   lzFeeHbar: number       // LayerZero fee in HBAR (from quote)
+}
+
+export interface SignBridgeUsdt0Request {
+  amount: string          // USDT0 amount (human readable, e.g., "10.5")
+  receiverAddress: string // Destination address on Arbitrum (0x...)
+  requestGasDrop: boolean
+  lzFeeHbar: number       // LayerZero fee in HBAR (from quote)
+}
+
+export interface SignBridgeUsdt0ReverseRequest {
+  amount: string          // USDT0 amount (human readable)
+  requestGasDrop?: boolean
 }
 
 export interface SignBridgeResponse {
