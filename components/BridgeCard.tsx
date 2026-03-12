@@ -17,7 +17,10 @@ import {
   accountIdToEvmAddress,
   HEDERA_CONFIG,
 } from '@/lib/bridge/bridgeConstants'
+import { USDT0_HEDERA } from '@/lib/bridge/usdt0Constants'
 import { formatAmount } from '@/utils/amountValidation'
+
+type BridgeToken = 'USDC' | 'USDT0'
 
 interface LiquidityInfo {
   availableBalance: string
@@ -27,6 +30,7 @@ interface LiquidityInfo {
 // ── Inline SVG Icons ──
 
 const USDC_ICON_URL = 'https://dwk1opv266jxs.cloudfront.net/icons/tokens/0.0.456858.png'
+const USDT0_ICON_URL = 'https://assets.coingecko.com/coins/images/325/small/Tether.png'
 
 
 function HederaNetworkBadge() {
@@ -69,6 +73,7 @@ export function BridgeCard() {
 
   const [direction, setDirection] = useState<BridgeDirection>('hedera_to_arbitrum')
   const [walletMode, setWalletMode] = useState<WalletMode>('native')
+  const [selectedToken, setSelectedToken] = useState<BridgeToken>('USDC')
   const [loginOpen, setLoginOpen] = useState(false)
   const [amount, setAmount] = useState('')
   const [receiverAddress, setReceiverAddress] = useState('')
@@ -86,8 +91,16 @@ export function BridgeCard() {
   const formattedUsdcBalance = rawUsdcBalance
     ? formatAmount(rawUsdcBalance, USDC_DECIMALS)
     : null
+  const rawUsdt0Balance = hederaBalances[USDT0_HEDERA.TOKEN_ID]
+  const formattedUsdt0Balance = rawUsdt0Balance
+    ? formatAmount(rawUsdt0Balance, USDC_DECIMALS)
+    : null
   const rawHbarBalance = hederaBalances['HBAR']
   const hbarBalance = rawHbarBalance ? parseInt(rawHbarBalance) / 1e8 : 0
+
+  // Active balance based on selected token
+  const activeHederaBalance = selectedToken === 'USDT0' ? formattedUsdt0Balance : formattedUsdcBalance
+  const tokenIcon = selectedToken === 'USDT0' ? USDT0_ICON_URL : USDC_ICON_URL
 
   // MetaMask connection state (Arb -> Hedera, wallet mode only)
   const [evmAccount, setEvmAccount] = useState<string | null>(null)
@@ -233,7 +246,18 @@ export function BridgeCard() {
           ? (receiverAddress || '0x0000000000000000000000000000000000000001')
           : (account ? accountIdToEvmAddress(account) : '0x0000000000000000000000000000000000000001')
 
-        if (direction === 'hedera_to_arbitrum') {
+        if (selectedToken === 'USDT0') {
+          // USDT0 quote via OFT
+          const res = await fetch('/api/bridge/quote-usdt0', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount, receiver, direction, requestGasDrop: useGasDrop }),
+          })
+          const data = await res.json()
+          if (data.success) {
+            setLzFeeEstimate(data.nativeFeeFormatted)
+          }
+        } else if (direction === 'hedera_to_arbitrum') {
           const res = await fetch('/api/bridge/quote-v3', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -261,7 +285,7 @@ export function BridgeCard() {
     }, 800)
 
     return () => clearTimeout(timeout)
-  }, [amount, direction, useGasDrop, receiverAddress, account, isConnected])
+  }, [amount, direction, useGasDrop, receiverAddress, account, isConnected, selectedToken])
 
 
   const toggleDirection = () => {
@@ -278,26 +302,44 @@ export function BridgeCard() {
     bridge.reset()
   }
 
+  const switchToken = (token: BridgeToken) => {
+    setSelectedToken(token)
+    setAmount('')
+    setLzFeeEstimate(null)
+  }
+
   const handleBridge = async () => {
     if (!amount || parseFloat(amount) <= 0) return
 
-    if (direction === 'hedera_to_arbitrum') {
-      const receiver = (isCustodial && walletMode === 'native' && custodialEvmAddress) || receiverAddress
-      if (!receiver || !/^0x[a-fA-F0-9]{40}$/.test(receiver)) {
-        return
+    if (selectedToken === 'USDT0') {
+      if (direction === 'hedera_to_arbitrum') {
+        const receiver = (isCustodial && walletMode === 'native' && custodialEvmAddress) || receiverAddress
+        if (!receiver || !/^0x[a-fA-F0-9]{40}$/.test(receiver)) return
+        await bridge.bridgeUsdt0ToArbitrum(amount, receiver, useGasDrop)
+      } else {
+        if (!account) return
+        await bridge.bridgeUsdt0ToHedera(amount, account)
       }
-      await bridge.bridgeToArbitrum(amount, receiver, useGasDrop)
     } else {
-      if (!account) return
-      const forceExternal = isCustodial && walletMode === 'external'
-      await bridge.bridgeToHedera(amount, account, forceExternal ? { forceExternal: true } : undefined)
+      if (direction === 'hedera_to_arbitrum') {
+        const receiver = (isCustodial && walletMode === 'native' && custodialEvmAddress) || receiverAddress
+        if (!receiver || !/^0x[a-fA-F0-9]{40}$/.test(receiver)) return
+        await bridge.bridgeToArbitrum(amount, receiver, useGasDrop)
+      } else {
+        if (!account) return
+        const forceExternal = isCustodial && walletMode === 'external'
+        await bridge.bridgeToHedera(amount, account, forceExternal ? { forceExternal: true } : undefined)
+      }
     }
   }
 
   const amountFloat = parseFloat(amount) || 0
   const { amountAfterFee, feeAmount } = calculateAmountAfterFee(amountFloat)
+  // USDT0 has no bridge fee — user receives the full amount (only LZ fee)
+  const effectiveAmountAfterFee = selectedToken === 'USDT0' ? amountFloat : amountAfterFee
   const isValidAmount = amountFloat >= MIN_SPOT_BRIDGE_NO_GAS_USD
-  const hasEnoughLiquidity = amountAfterFee <= parseFloat(liquidity.availableBalance)
+  // USDT0 uses OFT (no liquidity pool), USDC uses bridge contract liquidity
+  const hasEnoughLiquidity = selectedToken === 'USDT0' ? true : amountAfterFee <= parseFloat(liquidity.availableBalance)
 
   const isReceiverValid = direction === 'hedera_to_arbitrum'
     ? (isCustodial && walletMode === 'native' && !!custodialEvmAddress) || /^0x[a-fA-F0-9]{40}$/.test(receiverAddress)
@@ -311,11 +353,11 @@ export function BridgeCard() {
   const hasEnoughEvmBalance = !isArbToHedera || !activeEvmBalance || amountFloat <= parseFloat(activeEvmBalance.usdc)
   const lowEthForGas = isArbToHedera && activeEvmBalance && parseFloat(activeEvmBalance.eth) < 0.0001
 
-  // Check Hedera USDC balance for Hedera -> Arb direction
+  // Check Hedera balance for Hedera -> Arb direction (token-aware)
   const hasInsufficientHederaBalance = direction === 'hedera_to_arbitrum'
-    && formattedUsdcBalance !== null
+    && activeHederaBalance !== null
     && amountFloat > 0
-    && amountFloat > parseFloat(formattedUsdcBalance)
+    && amountFloat > parseFloat(activeHederaBalance)
 
   const canBridge = isConnected && isValidAmount && isReceiverValid && hasEnoughLiquidity
     && hasEnoughEvmBalance && !hasInsufficientHederaBalance && !needsMetaMask && !bridge.isExecuting
@@ -334,12 +376,30 @@ export function BridgeCard() {
         </div>
       </div>
 
+      {/* Token Selection Tabs */}
+      <div className="flex gap-2 mb-4">
+        {(['USDC', 'USDT0'] as BridgeToken[]).map((token) => (
+          <button
+            key={token}
+            onClick={() => switchToken(token)}
+            disabled={bridge.isExecuting}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              selectedToken === token
+                ? 'bg-white text-black'
+                : 'bg-neutral-800 text-neutral-400 hover:text-white'
+            }`}
+          >
+            {token}
+          </button>
+        ))}
+      </div>
+
       {/* Token selectors — side by side */}
       <div className="relative flex items-center gap-0">
         <div className="flex-1 pr-4">
           <TokenSelector
             label="From"
-            selectedToken={{ icon: USDC_ICON_URL, symbol: 'USDC', name: fromNetwork } as any}
+            selectedToken={{ icon: tokenIcon, symbol: selectedToken, name: fromNetwork } as any}
             badge={direction === 'hedera_to_arbitrum' ? <HederaNetworkBadge /> : <ArbitrumNetworkBadge />}
           />
         </div>
@@ -357,7 +417,7 @@ export function BridgeCard() {
         <div className="flex-1 pl-4">
           <TokenSelector
             label="To"
-            selectedToken={{ icon: USDC_ICON_URL, symbol: 'USDC', name: toNetwork } as any}
+            selectedToken={{ icon: tokenIcon, symbol: selectedToken, name: toNetwork } as any}
             badge={direction === 'hedera_to_arbitrum' ? <ArbitrumNetworkBadge /> : <HederaNetworkBadge />}
           />
         </div>
@@ -375,10 +435,11 @@ export function BridgeCard() {
                   let userMax = Infinity
                   if (isArbToHedera && activeEvmBalance) {
                     userMax = parseFloat(activeEvmBalance.usdc)
-                  } else if (direction === 'hedera_to_arbitrum' && formattedUsdcBalance) {
-                    userMax = parseFloat(formattedUsdcBalance)
+                  } else if (direction === 'hedera_to_arbitrum' && activeHederaBalance) {
+                    userMax = parseFloat(activeHederaBalance)
                   }
-                  const maxAmount = Math.min(parseFloat(liquidity.availableBalance) || 0, userMax)
+                  const poolMax = selectedToken === 'USDT0' ? Infinity : (parseFloat(liquidity.availableBalance) || 0)
+                  const maxAmount = Math.min(poolMax, userMax)
                   const value = (maxAmount * pct / 100).toFixed(2)
                   setAmount(value)
                 }}
@@ -401,17 +462,17 @@ export function BridgeCard() {
           className="w-full bg-transparent text-2xl font-semibold text-white placeholder:text-white/30 focus:outline-none disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
         <div className="flex items-center justify-between mt-1">
-          <span className="text-white/50 text-xs">USDC</span>
+          <span className="text-white/50 text-xs">{selectedToken}</span>
           <div className="flex items-center gap-2 text-xs">
             {/* User's balance */}
             {isConnected && direction === 'hedera_to_arbitrum' && (
               <span className="text-white/50">
                 {hederaBalancesLoading ? (
                   <Loader2 className="w-3 h-3 animate-spin inline" />
-                ) : formattedUsdcBalance !== null ? (
+                ) : activeHederaBalance !== null ? (
                   <>
                     Bal: <span className={`font-semibold ${hasInsufficientHederaBalance ? 'text-red-400' : 'text-white/70'}`}>
-                      {parseFloat(formattedUsdcBalance).toFixed(2)} USDC
+                      {parseFloat(activeHederaBalance).toFixed(2)} {selectedToken}
                     </span>
                   </>
                 ) : (
@@ -422,20 +483,24 @@ export function BridgeCard() {
             {isConnected && isArbToHedera && activeEvmBalance && (
               <span className="text-white/50">
                 Bal: <span className={`font-semibold ${!hasEnoughEvmBalance ? 'text-red-400' : 'text-white/70'}`}>
-                  {activeEvmBalance.usdc} USDC
+                  {activeEvmBalance.usdc} {selectedToken}
                 </span>
               </span>
             )}
-            {isConnected && (direction === 'hedera_to_arbitrum' || (isArbToHedera && activeEvmBalance)) && (
-              <span className="text-white/20">|</span>
+            {selectedToken === 'USDC' && (
+              <>
+                {isConnected && (direction === 'hedera_to_arbitrum' || (isArbToHedera && activeEvmBalance)) && (
+                  <span className="text-white/20">|</span>
+                )}
+                <span className="text-green-400">
+                  {liquidity.loading ? (
+                    <Loader2 className="w-3 h-3 animate-spin inline" />
+                  ) : (
+                    `${liquidity.availableBalance} available`
+                  )}
+                </span>
+              </>
             )}
-            <span className="text-green-400">
-              {liquidity.loading ? (
-                <Loader2 className="w-3 h-3 animate-spin inline" />
-              ) : (
-                `${liquidity.availableBalance} available`
-              )}
-            </span>
           </div>
         </div>
       </div>
@@ -451,7 +516,7 @@ export function BridgeCard() {
       {hasInsufficientHederaBalance && (
         <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 p-2.5 rounded-2xl mt-3">
           <Info className="w-3.5 h-3.5 flex-shrink-0" />
-          <span>Insufficient USDC balance. You have {parseFloat(formattedUsdcBalance!).toFixed(2)} USDC.</span>
+          <span>Insufficient {selectedToken} balance. You have {parseFloat(activeHederaBalance!).toFixed(2)} {selectedToken}.</span>
         </div>
       )}
 
@@ -650,10 +715,12 @@ export function BridgeCard() {
       {/* Fee breakdown */}
       {amountFloat > 0 && (
         <div className="bg-neutral-800/30 rounded-2xl p-3 space-y-2 text-sm mt-3">
-          <div className="flex justify-between">
-            <span className="text-white/40">Bridge fee ({BRIDGE_FEES.FEE_BASIS_POINTS / 100}%)</span>
-            <span className="text-white/70">{feeAmount.toFixed(2)} USDC</span>
-          </div>
+          {selectedToken === 'USDC' && (
+            <div className="flex justify-between">
+              <span className="text-white/40">Bridge fee ({BRIDGE_FEES.FEE_BASIS_POINTS / 100}%)</span>
+              <span className="text-white/70">{feeAmount.toFixed(2)} USDC</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-white/40">LayerZero fee</span>
             <span className="text-white/70">
@@ -664,7 +731,7 @@ export function BridgeCard() {
           </div>
           <div className="flex justify-between border-t border-white/5 pt-2 font-medium">
             <span className="text-white/70">You Receive</span>
-            <span className="text-green-400">{amountAfterFee.toFixed(2)} USDC</span>
+            <span className="text-green-400">{effectiveAmountAfterFee.toFixed(2)} {selectedToken}</span>
           </div>
         </div>
       )}
@@ -700,11 +767,11 @@ export function BridgeCard() {
                 Bridging...
               </span>
             ) : hasInsufficientHederaBalance ? (
-              'Insufficient USDC'
+              `Insufficient ${selectedToken}`
             ) : !hasEnoughEvmBalance ? (
-              'Insufficient USDC'
+              `Insufficient ${selectedToken}`
             ) : (
-              `Bridge ${amountFloat > 0 ? amountFloat.toFixed(2) + ' ' : ''}USDC`
+              `Bridge ${amountFloat > 0 ? amountFloat.toFixed(2) + ' ' : ''}${selectedToken}`
             )}
           </button>
         )}
