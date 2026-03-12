@@ -122,13 +122,13 @@ export function BridgeCard() {
 
   // MetaMask connection state (Arb -> Hedera, wallet mode only)
   const [evmAccount, setEvmAccount] = useState<string | null>(null)
-  const [evmBalance, setEvmBalance] = useState<{ usdc: string; eth: string } | null>(null)
+  const [evmBalance, setEvmBalance] = useState<{ usdc: string; usdt0: string; eth: string } | null>(null)
   const [evmConnecting, setEvmConnecting] = useState(false)
   const hasEthereum = typeof window !== 'undefined' && !!window.ethereum
   const isCustodial = connectionMode === 'custodial'
 
   // For custodial users in native mode: fetch Arbitrum balances using their derived EVM address
-  const [custodialEvmBalance, setCustodialEvmBalance] = useState<{ usdc: string; eth: string } | null>(null)
+  const [custodialEvmBalance, setCustodialEvmBalance] = useState<{ usdc: string; usdt0: string; eth: string } | null>(null)
   useEffect(() => {
     if (!isCustodial || !custodialEvmAddress || direction !== 'arbitrum_to_hedera' || walletMode !== 'native') {
       setCustodialEvmBalance(null)
@@ -140,6 +140,7 @@ export function BridgeCard() {
         if (data.success) {
           setCustodialEvmBalance({
             usdc: (parseInt(data.usdcBalance || '0') / 1_000_000).toFixed(2),
+            usdt0: (parseInt(data.usdt0Balance || '0') / 1_000_000).toFixed(2),
             eth: (parseInt(data.ethBalance || '0') / 1e18).toFixed(4),
           })
         }
@@ -175,8 +176,9 @@ export function BridgeCard() {
       const data = await res.json()
       if (data.success) {
         const usdcFormatted = (parseInt(data.usdcBalance || '0') / 1_000_000).toFixed(2)
+        const usdt0Formatted = (parseInt(data.usdt0Balance || '0') / 1_000_000).toFixed(2)
         const ethFormatted = (parseInt(data.ethBalance || '0') / 1e18).toFixed(4)
-        setEvmBalance({ usdc: usdcFormatted, eth: ethFormatted })
+        setEvmBalance({ usdc: usdcFormatted, usdt0: usdt0Formatted, eth: ethFormatted })
       }
     } catch {
       // User rejected or network error
@@ -202,6 +204,7 @@ export function BridgeCard() {
             if (data.success) {
               setEvmBalance({
                 usdc: (parseInt(data.usdcBalance || '0') / 1_000_000).toFixed(2),
+                usdt0: (parseInt(data.usdt0Balance || '0') / 1_000_000).toFixed(2),
                 eth: (parseInt(data.ethBalance || '0') / 1e18).toFixed(4),
               })
             }
@@ -368,7 +371,8 @@ export function BridgeCard() {
   const useNativeWallet = isCustodial && walletMode === 'native'
   const needsMetaMask = isArbToHedera && !useNativeWallet && !evmAccount
   const activeEvmBalance = useNativeWallet ? custodialEvmBalance : evmBalance
-  const hasEnoughEvmBalance = !isArbToHedera || !activeEvmBalance || amountFloat <= parseFloat(activeEvmBalance.usdc)
+  const activeEvmTokenBalance = activeEvmBalance ? (selectedToken === 'USDT0' ? activeEvmBalance.usdt0 : activeEvmBalance.usdc) : null
+  const hasEnoughEvmBalance = !isArbToHedera || !activeEvmTokenBalance || amountFloat <= parseFloat(activeEvmTokenBalance)
   const lowEthForGas = isArbToHedera && activeEvmBalance && parseFloat(activeEvmBalance.eth) < 0.0001
 
   // Check Hedera balance for Hedera -> Arb direction (token-aware)
@@ -459,8 +463,8 @@ export function BridgeCard() {
                 key={pct}
                 onClick={() => {
                   let userMax = Infinity
-                  if (isArbToHedera && activeEvmBalance) {
-                    userMax = parseFloat(activeEvmBalance.usdc)
+                  if (isArbToHedera && activeEvmTokenBalance) {
+                    userMax = parseFloat(activeEvmTokenBalance)
                   } else if (direction === 'hedera_to_arbitrum' && activeHederaBalance) {
                     userMax = parseFloat(activeHederaBalance)
                   }
@@ -506,10 +510,10 @@ export function BridgeCard() {
                 )}
               </span>
             )}
-            {isConnected && isArbToHedera && activeEvmBalance && (
+            {isConnected && isArbToHedera && activeEvmTokenBalance && (
               <span className="text-white/50">
                 Bal: <span className={`font-semibold ${!hasEnoughEvmBalance ? 'text-red-400' : 'text-white/70'}`}>
-                  {activeEvmBalance.usdc} {selectedToken}
+                  {activeEvmTokenBalance} {selectedToken}
                 </span>
               </span>
             )}
@@ -606,7 +610,7 @@ export function BridgeCard() {
                   {custodialEvmAddress.slice(0, 6)}...{custodialEvmAddress.slice(-4)}
                 </span>
                 <span className="text-xs text-green-400 flex-shrink-0 ml-2">
-                  {custodialEvmBalance ? `${custodialEvmBalance.usdc} USDC` : <Loader2 className="w-3 h-3 animate-spin inline" />}
+                  {custodialEvmBalance ? `${selectedToken === 'USDT0' ? custodialEvmBalance.usdt0 : custodialEvmBalance.usdc} ${selectedToken}` : <Loader2 className="w-3 h-3 animate-spin inline" />}
                 </span>
               </div>
               <p className="text-xs text-white/30 mt-1">KMS-managed wallet</p>
@@ -617,7 +621,7 @@ export function BridgeCard() {
                 {evmAccount.slice(0, 6)}...{evmAccount.slice(-4)}
               </span>
               <span className="text-xs text-green-400 flex-shrink-0 ml-2">
-                {evmBalance ? `${evmBalance.usdc} USDC` : <Loader2 className="w-3 h-3 animate-spin inline" />}
+                {evmBalance ? `${selectedToken === 'USDT0' ? evmBalance.usdt0 : evmBalance.usdc} ${selectedToken}` : <Loader2 className="w-3 h-3 animate-spin inline" />}
               </span>
             </div>
           ) : !useNativeWallet ? (
@@ -634,7 +638,7 @@ export function BridgeCard() {
             </button>
           ) : null}
           {activeEvmBalance && amountFloat > 0 && !hasEnoughEvmBalance && (
-            <p className="text-xs text-red-400 mt-1">Insufficient USDC balance</p>
+            <p className="text-xs text-red-400 mt-1">Insufficient {selectedToken} balance</p>
           )}
           {lowEthForGas && (
             <p className="text-xs text-yellow-500 mt-1">Low ETH for gas fees</p>
