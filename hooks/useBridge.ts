@@ -19,6 +19,7 @@ import {
   LAYER_ZERO_CONFIG,
 } from '@/lib/bridge/bridgeConstants'
 import { fetchBridgeQuoteV3 } from '@/lib/bridge/bridgeTransactionBuilder'
+import { fetchUsdt0Quote } from '@/lib/bridge/usdt0TransactionBuilder'
 
 interface BridgeState {
   status: BridgeStatus
@@ -39,7 +40,7 @@ interface TrackResult {
 
 export function useBridge() {
   const { account, isConnected, connectionMode, session } = useConnectionContext()
-  const { signBridge } = useCustodialConnection()
+  const { signBridge, signBridgeUsdt0, signBridgeUsdt0Reverse } = useCustodialConnection()
 
   const [state, setState] = useState<BridgeState>({
     status: 'idle',
@@ -479,11 +480,126 @@ export function useBridge() {
     }
   }, [connectionMode, session, setStatus, setError, trackArbToHedera])
 
+  /**
+   * Bridge USDT0 from Hedera to Arbitrum via OFT
+   */
+  const bridgeUsdt0ToArbitrum = useCallback(async (
+    amount: string,
+    receiverAddress: string,
+    requestGasDrop: boolean = false
+  ) => {
+    if (!account || !isConnected) {
+      setError('Wallet not connected')
+      return
+    }
+
+    setState(prev => ({
+      ...prev,
+      direction: 'hedera_to_arbitrum',
+      status: 'quoting',
+      statusMessage: 'Getting USDT0 LayerZero quote...',
+      error: null,
+      transactionId: null,
+    }))
+
+    try {
+      // 1. Fetch OFT quote
+      const quote = await fetchUsdt0Quote(amount, receiverAddress, 'hedera_to_arbitrum', requestGasDrop)
+      if (!quote.success) {
+        setError(quote.error || 'Failed to get USDT0 quote')
+        return
+      }
+
+      const lzFeeHbar = Number(quote.nativeFee) / 1e18 // weibar to HBAR
+
+      // 2. Get initial Arbitrum USDT0 balance for tracking
+      let initialBalance = '0'
+      try {
+        const balRes = await fetch(`/api/bridge/arbitrum-balance?address=${receiverAddress}&token=usdt0`)
+        const balData = await balRes.json()
+        if (balData.success) {
+          initialBalance = balData.usdt0Balance || '0'
+        }
+      } catch {
+        // Continue with 0
+      }
+
+      // 3. Sign and execute via KMS
+      setStatus('approving', 'Approving USDT0 for bridge...')
+      const bridgeResult = await signBridgeUsdt0(amount, receiverAddress, requestGasDrop, lzFeeHbar)
+      const transactionId = bridgeResult.transactionId
+
+      setState(prev => ({ ...prev, transactionId }))
+
+      // 4. Track delivery (same LZ tracking)
+      await trackBridge(transactionId, receiverAddress, initialBalance)
+    } catch (error: any) {
+      console.error('[USDT0 Bridge] Error:', error)
+      const msg = error.message || 'USDT0 bridge failed'
+      if (msg.includes('INSUFFICIENT_PAYER_BALANCE')) {
+        setError('Insufficient HBAR to pay bridge fees.')
+      } else {
+        setError(msg)
+      }
+    }
+  }, [account, isConnected, signBridgeUsdt0, setStatus, setError, trackBridge])
+
+  /**
+   * Bridge USDT0 from Arbitrum to Hedera via OFT (KMS custodial)
+   */
+  const bridgeUsdt0ToHedera = useCallback(async (
+    amount: string,
+    hederaReceiverAccountId: string
+  ) => {
+    if (connectionMode !== 'custodial') {
+      setError('USDT0 reverse bridge requires custodial account')
+      return
+    }
+
+    try {
+      setState(prev => ({
+        ...prev,
+        direction: 'arbitrum_to_hedera',
+        status: 'bridging',
+        statusMessage: 'Signing USDT0 bridge via KMS...',
+        error: null,
+        transactionId: null,
+      }))
+
+      const token = session?.access_token
+      if (!token) throw new Error('Not authenticated')
+
+      const res = await fetch('/api/kms/sign-bridge-usdt0-reverse', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ amount }),
+      })
+
+      const data = await res.json()
+      if (!data.success) {
+        throw new Error(data.error || 'USDT0 bridge reverse failed')
+      }
+
+      setState(prev => ({ ...prev, transactionId: data.txHash }))
+
+      // Track via LayerZero
+      await trackArbToHedera(data.txHash)
+    } catch (err: any) {
+      console.error('[USDT0 Bridge] Arb->Hedera error:', err)
+      setError(err.message || 'USDT0 bridge failed')
+    }
+  }, [connectionMode, session, setStatus, setError, trackArbToHedera])
+
   return {
     ...state,
     isExecuting: state.status !== 'idle' && state.status !== 'success' && state.status !== 'error',
     bridgeToArbitrum,
     bridgeToHedera,
+    bridgeUsdt0ToArbitrum,
+    bridgeUsdt0ToHedera,
     reset,
   }
 }
