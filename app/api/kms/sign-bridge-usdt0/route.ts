@@ -7,7 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { validateSigningRequest, recordSigningOperation, AuthError } from '@/lib/kms/rate-limiter'
-import { signAndExecuteUsdt0Approval, signAndExecuteUsdt0Bridge } from '@/lib/kms/transaction-signer'
+import { signAndExecuteAssociation, signAndExecuteUsdt0Approval, signAndExecuteUsdt0Bridge } from '@/lib/kms/transaction-signer'
+import { USDT0_HEDERA } from '@/lib/bridge/usdt0Constants'
 import type { SignBridgeUsdt0Request } from '@/types/kms'
 
 export async function POST(request: NextRequest) {
@@ -42,7 +43,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 3. Execute HTS approval for OFT contract
+    // 3. Auto-associate USDT0 on Hedera if needed
+    try {
+      const mirrorUrl = process.env.NEXT_PUBLIC_MIRROR_NODE_URL || 'https://mainnet-public.mirrornode.hedera.com'
+      const tokensRes = await fetch(`${mirrorUrl}/api/v1/accounts/${ctx.accountId}/tokens?token.id=${USDT0_HEDERA.TOKEN_ID}`)
+      const tokensData = await tokensRes.json()
+      if (!tokensData.tokens || tokensData.tokens.length === 0) {
+        await signAndExecuteAssociation(
+          { tokenId: USDT0_HEDERA.TOKEN_ID },
+          ctx.accountId,
+          ctx.kmsKeyId,
+          ctx.publicKeyHex
+        )
+      }
+    } catch (assocError: any) {
+      if (!assocError.message?.includes('TOKEN_ALREADY_ASSOCIATED')) {
+        console.warn('[USDT0 Bridge] Association check/attempt failed:', assocError.message)
+      }
+    }
+
+    // 4. Execute HTS approval for OFT contract
     await signAndExecuteUsdt0Approval(
       body.amount,
       ctx.accountId,
@@ -50,7 +70,7 @@ export async function POST(request: NextRequest) {
       ctx.publicKeyHex
     )
 
-    // 4. Execute OFT.send() bridge transaction
+    // 5. Execute OFT.send() bridge transaction
     const transactionId = await signAndExecuteUsdt0Bridge(
       body,
       ctx.accountId,
@@ -58,7 +78,7 @@ export async function POST(request: NextRequest) {
       ctx.publicKeyHex
     )
 
-    // 5. Record audit
+    // 6. Record audit
     await recordSigningOperation(ctx, 'bridge_usdt0', {
       amount: body.amount,
       receiverAddress: body.receiverAddress,
