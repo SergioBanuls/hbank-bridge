@@ -66,7 +66,7 @@ export default function PortfolioPage() {
     const { balances, loading: balancesLoading } = useTokenBalances(custodialAccountId)
     const { data: tokens, isLoading: tokensLoading } = useTokens()
     const { prices, isLoading: pricesLoading } = useTokenPricesContext()
-    const { eth, usdc, ethPriceUsd, isLoading: evmLoading } = useEVMBalances(evmAddress)
+    const { eth, usdc, usdt0, ethPriceUsd, isLoading: evmLoading } = useEVMBalances(evmAddress)
     const isHederaLoading = balancesLoading || tokensLoading || pricesLoading
 
     // Build sorted Hedera asset list
@@ -106,7 +106,8 @@ export default function PortfolioPage() {
     // Compute EVM values
     const evmEthValue = parseFloat(eth) * ethPriceUsd
     const evmUsdcValue = parseFloat(usdc)
-    const evmTotalValue = evmEthValue + evmUsdcValue
+    const evmUsdt0Value = parseFloat(usdt0) // $1.00 stablecoin
+    const evmTotalValue = evmEthValue + evmUsdcValue + evmUsdt0Value
 
     const hederaTotalValue = hederaAssets.reduce((sum, a) => sum + a.valueUsd, 0)
     const totalValue = hederaTotalValue + evmTotalValue
@@ -297,6 +298,15 @@ export default function PortfolioPage() {
                                                 valueUsd={formatUsd(evmUsdcValue)}
                                                 price="$1.00"
                                                 portfolioPercent={totalValue > 0 ? (evmUsdcValue / totalValue) * 100 : undefined}
+                                            />
+                                            <TokenRow
+                                                icon="https://assets.coingecko.com/coins/images/325/small/Tether.png"
+                                                name="Tether (OFT)"
+                                                symbol="USDT0"
+                                                balance={formatBalance(parseFloat(usdt0))}
+                                                valueUsd={formatUsd(evmUsdt0Value)}
+                                                price="$1.00"
+                                                portfolioPercent={totalValue > 0 ? (evmUsdt0Value / totalValue) * 100 : undefined}
                                             />
                                         </div>
                                     )}
