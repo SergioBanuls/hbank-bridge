@@ -423,16 +423,14 @@ export async function signAndExecuteUsdt0Bridge(
       params.requestGasDrop
     )
 
-    // Convert LZ fee from HBAR to tinybar, then to weibar for msg.value
-    // Hedera EVM uses weibar (18 decimals): HBAR * 1e18 = weibar
-    // But setPayableAmount expects HBAR, so just add 20% buffer in HBAR
+    // Add 20% buffer to LZ fee (feeWithBuffer is in HBAR)
     const feeWithBuffer = Math.ceil(params.lzFeeHbar * 1.2 * 100) / 100
 
-    // Build MessagingFee struct (nativeFee in weibar, lzTokenFee = 0)
-    // quoteSend returns weibar on Hedera EVM, pass it through
-    const nativeFeeWeibar = BigInt(Math.floor(params.lzFeeHbar * 1e18))
+    // Build MessagingFee struct (nativeFee in tinybars, lzTokenFee = 0)
+    // Hedera EVM uses tinybars for msg.value, so _fee.nativeFee must also be in tinybars
+    const nativeFeeTinybar = BigInt(Math.floor(feeWithBuffer * 1e8))
     const messagingFee = {
-      nativeFee: nativeFeeWeibar.toString(),
+      nativeFee: nativeFeeTinybar.toString(),
       lzTokenFee: 0,
     }
 

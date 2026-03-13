@@ -14,6 +14,7 @@ import { getArbitrumProvider } from '@/lib/bridge/arbitrumRpc'
 const MIRROR_NODE_URL = process.env.HEDERA_MIRROR_NODE_URL || 'https://mainnet-public.mirrornode.hedera.com'
 const LZ_SCAN_API = 'https://api-mainnet.layerzero-scan.com'
 const ARBITRUM_USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
+const ARBITRUM_USDT0 = '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9'
 const ERC20_ABI = ['function balanceOf(address account) view returns (uint256)']
 
 const securityHeaders = {
@@ -127,11 +128,12 @@ async function checkLayerZeroStatus(txHash: string): Promise<LayerZeroStatus> {
     }
 }
 
-async function checkArbitrumBalance(address: string, initialBalance: bigint): Promise<ArbitrumStatus> {
+async function checkArbitrumBalance(address: string, initialBalance: bigint, token: 'usdc' | 'usdt0' = 'usdc'): Promise<ArbitrumStatus> {
     try {
+        const tokenAddress = token === 'usdt0' ? ARBITRUM_USDT0 : ARBITRUM_USDC
         const provider = await getArbitrumProvider()
-        const usdcContract = new ethers.Contract(ARBITRUM_USDC, ERC20_ABI, provider)
-        const balance = await usdcContract.balanceOf(address)
+        const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, provider)
+        const balance = await tokenContract.balanceOf(address)
         const currentBalance = BigInt(balance.toString())
 
         return {
@@ -160,7 +162,7 @@ function determineOverallStatus(
 
 export async function POST(request: NextRequest) {
     try {
-        let body: { transactionId: string; destinationAddress: string; initialArbitrumBalance: string }
+        let body: { transactionId: string; destinationAddress: string; initialArbitrumBalance: string; token?: 'usdc' | 'usdt0' }
         try {
             body = await request.json()
         } catch {
@@ -176,6 +178,8 @@ export async function POST(request: NextRequest) {
                 { status: 400, headers: securityHeaders }
             )
         }
+
+        const token = body.token === 'usdt0' ? 'usdt0' : 'usdc'
 
         if (!ethers.utils.isAddress(body.destinationAddress)) {
             return NextResponse.json(
@@ -196,7 +200,7 @@ export async function POST(request: NextRequest) {
 
         const [hedera, arbitrum] = await Promise.all([
             checkHederaTransaction(body.transactionId),
-            checkArbitrumBalance(body.destinationAddress, initialBalance),
+            checkArbitrumBalance(body.destinationAddress, initialBalance, token),
         ])
 
         let layerZero: LayerZeroStatus = {}

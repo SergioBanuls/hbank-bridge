@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     } else {
       // ERC-20 transfer (USDC or USDT0)
       const tokenAddress = token === 'usdt0' ? USDT0_ARBITRUM.TOKEN_ADDRESS : ARBITRUM_CONFIG.USDC_ADDRESS
-      const tokenSymbol = token === 'usdt0' ? 'USDT0' : 'USDC'
+      const tokenSymbol = token === 'usdt0' ? 'USD₮0' : 'USDC'
       const amountRaw = Math.floor(amountFloat * 1_000_000) // 6 decimals
 
       const erc20Contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider)

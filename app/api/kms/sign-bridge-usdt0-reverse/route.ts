@@ -84,21 +84,12 @@ export async function POST(request: NextRequest) {
     const balance = await usdt0Contract.balanceOf(evmAddress)
     if (balance.lt(amountRaw)) {
       return NextResponse.json(
-        { success: false, error: `Insufficient USDT0 on Arbitrum. Have: ${ethers.utils.formatUnits(balance, 6)}, need: ${body.amount}` },
+        { success: false, error: `Insufficient USD₮0 on Arbitrum. Have: ${ethers.utils.formatUnits(balance, 6)}, need: ${body.amount}` },
         { status: 400 }
       )
     }
 
-    // 6. Check ETH for gas
-    const ethBalance = await provider.getBalance(evmAddress)
-    if (ethBalance.isZero()) {
-      return NextResponse.json(
-        { success: false, error: 'No ETH on Arbitrum for gas fees. Send ETH to your EVM address first.' },
-        { status: 400 }
-      )
-    }
-
-    // 7. Auto-associate USDT0 on Hedera if needed
+    // 6. Auto-associate USDT0 on Hedera if needed
     try {
       const mirrorUrl = process.env.NEXT_PUBLIC_MIRROR_NODE_URL || 'https://mainnet-public.mirrornode.hedera.com'
       const tokensRes = await fetch(`${mirrorUrl}/api/v1/accounts/${ctx.accountId}/tokens?token.id=${USDT0_HEDERA.TOKEN_ID}`)
@@ -117,7 +108,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 8. Get OFT quote on Arbitrum
+    // 7. Get OFT quote on Arbitrum
     const receiverEvmAddress = accountIdToEvmAddress(ctx.accountId)
     const sendParam = buildSendParam(
       USDT0_LZ_CONFIG.HEDERA_EID,
@@ -142,6 +133,21 @@ export async function POST(request: NextRequest) {
     const nativeFee = messagingFee.nativeFee || messagingFee[0]
     const feeWithBuffer = nativeFee.mul(120).div(100) // 20% buffer
 
+    // 8. Check ETH covers gas + LZ fee (use maxFeePerGas for accurate worst-case estimate)
+    const ethBalance = await provider.getBalance(evmAddress)
+    const feeData = await provider.getFeeData()
+    const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || ethers.BigNumber.from(2_000_000_000)
+    const gasEstimate = ethers.BigNumber.from(USDT0_GAS_CONFIG.ARBITRUM_OFT_SEND_GAS).mul(gasPrice)
+    const totalNeeded = feeWithBuffer.add(gasEstimate)
+    if (ethBalance.lt(totalNeeded)) {
+      const haveEth = parseFloat(ethers.utils.formatEther(ethBalance)).toFixed(6)
+      const needEth = parseFloat(ethers.utils.formatEther(totalNeeded)).toFixed(6)
+      return NextResponse.json(
+        { success: false, error: `Insufficient ETH for gas + LZ fee. Have ${haveEth}, need ~${needEth} ETH. Send ETH on Arbitrum to ${evmAddress}` },
+        { status: 400 }
+      )
+    }
+
     // 9. Check USDT0 allowance -> approve OFT if needed
     const allowance = await usdt0Contract.allowance(evmAddress, USDT0_ARBITRUM.OFT_ADDRESS)
     if (allowance.lt(amountRaw)) {
@@ -165,7 +171,7 @@ export async function POST(request: NextRequest) {
         sendParam.composeMsg,
         sendParam.oftCmd,
       ],
-      [nativeFee, 0], // MessagingFee: use exact quote (buffer is in msg.value)
+      [feeWithBuffer, 0], // MessagingFee: USDT0 OFT checks _fee.nativeFee, not just msg.value
       evmAddress,      // refundAddress
       {
         value: feeWithBuffer,
@@ -204,7 +210,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: false, error: error.message || 'USDT0 bridge reverse failed' },
+      { success: false, error: error.message || 'USD₮0 bridge reverse failed' },
       { status: 500 }
     )
   }

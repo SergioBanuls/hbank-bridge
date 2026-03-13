@@ -310,7 +310,7 @@ export default function PortfolioPage() {
                                             <TokenRow
                                                 icon="https://assets.coingecko.com/coins/images/325/small/Tether.png"
                                                 name="Tether (OFT)"
-                                                symbol="USDT0"
+                                                symbol="USD₮0"
                                                 balance={formatBalance(parseFloat(usdt0))}
                                                 valueUsd={formatUsd(evmUsdt0Value)}
                                                 price="$1.00"

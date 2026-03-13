@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const msg = error.message || 'USDT0 bridge failed'
+    const msg = error.message || 'USD₮0 bridge failed'
     if (msg.includes('INSUFFICIENT_PAYER_BALANCE')) {
       return NextResponse.json(
         { success: false, error: 'Insufficient HBAR to pay bridge fees. Send HBAR to your Hedera account first.' },

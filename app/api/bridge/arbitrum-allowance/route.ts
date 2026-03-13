@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url)
         const owner = searchParams.get('owner')
         const spender = searchParams.get('spender')
+        const token = searchParams.get('token')
 
         if (!owner || !spender) {
             return NextResponse.json(
@@ -38,9 +39,11 @@ export async function GET(request: NextRequest) {
             )
         }
 
+        const tokenAddress = token && ethers.utils.isAddress(token) ? token : ARBITRUM_USDC
+
         const provider = await getArbitrumProvider()
-        const usdcContract = new ethers.Contract(ARBITRUM_USDC, ERC20_ABI, provider)
-        const allowance = await usdcContract.allowance(owner, spender)
+        const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider)
+        const allowance = await contract.allowance(owner, spender)
 
         return NextResponse.json({
             success: true,

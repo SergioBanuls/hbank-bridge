@@ -74,6 +74,11 @@ export async function GET() {
             }
         })
 
+        // Inject stablecoin prices for tokens not on SaucerSwap
+        if (!priceMap['0.0.10282787']) {
+            priceMap['0.0.10282787'] = 1.0 // USDT0
+        }
+
         return NextResponse.json(priceMap, {
             headers: {
                 'Cache-Control':

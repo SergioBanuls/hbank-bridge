@@ -8,6 +8,19 @@ import { NextResponse } from 'next/server';
 
 const API_URL = 'https://api.etaswap.com/v1/tokens';
 
+// Tokens not in Etaswap that we need to show in portfolio
+const EXTRA_TOKENS = [
+  {
+    name: 'USD₮0',
+    symbol: 'USD₮0',
+    decimals: 6,
+    address: '0.0.10282787',
+    solidityAddress: '0x00000000000000000000000000000000009Ce723',
+    icon: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+    providers: ['usdt0'],
+  },
+];
+
 export async function GET() {
   try {
     const response = await fetch(API_URL, {
@@ -35,6 +48,14 @@ export async function GET() {
       }
       return token
     })
+
+    // Inject tokens not present in Etaswap
+    for (const extra of EXTRA_TOKENS) {
+      const exists = normalizedTokens.some(
+        (t: { address?: string }) => t.address === extra.address
+      );
+      if (!exists) normalizedTokens.push(extra);
+    }
 
     return NextResponse.json(normalizedTokens);
   } catch (error) {

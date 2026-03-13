@@ -20,6 +20,13 @@ import {
 } from '@/lib/bridge/bridgeConstants'
 import { fetchBridgeQuoteV3 } from '@/lib/bridge/bridgeTransactionBuilder'
 import { fetchUsdt0Quote } from '@/lib/bridge/usdt0TransactionBuilder'
+import {
+  USDT0_ARBITRUM,
+  USDT0_LZ_CONFIG,
+  USDT0_GAS_CONFIG,
+  OFT_ABI,
+  buildSendParam,
+} from '@/lib/bridge/usdt0Constants'
 import { truncateBalance } from '@/utils/amountValidation'
 
 interface BridgeState {
@@ -80,9 +87,11 @@ export function useBridge() {
   const trackBridge = useCallback(async (
     transactionId: string,
     destinationAddress: string,
-    initialBalance: string
+    initialBalance: string,
+    token: 'usdc' | 'usdt0' = 'usdc'
   ): Promise<boolean> => {
     trackingRef.current = true
+    const tokenLabel = token === 'usdt0' ? 'USD₮0' : 'USDC'
     setStatus('waiting_lz', 'Waiting for LayerZero delivery...')
 
     const maxAttempts = 120 // ~10 minutes with adaptive polling
@@ -97,6 +106,7 @@ export function useBridge() {
             transactionId,
             destinationAddress,
             initialArbitrumBalance: initialBalance,
+            token,
           }),
         })
 
@@ -116,7 +126,7 @@ export function useBridge() {
 
         switch (result.status) {
           case 'delivered':
-            setStatus('success', 'Bridge complete! USDC delivered.')
+            setStatus('success', `Bridge complete! ${tokenLabel} delivered.`)
             trackingRef.current = false
             return true
 
@@ -498,7 +508,7 @@ export function useBridge() {
       ...prev,
       direction: 'hedera_to_arbitrum',
       status: 'quoting',
-      statusMessage: 'Getting USDT0 LayerZero quote...',
+      statusMessage: 'Getting USD₮0 LayerZero quote...',
       error: null,
       transactionId: null,
     }))
@@ -507,11 +517,11 @@ export function useBridge() {
       // 1. Fetch OFT quote
       const quote = await fetchUsdt0Quote(amount, receiverAddress, 'hedera_to_arbitrum', requestGasDrop)
       if (!quote.success) {
-        setError(quote.error || 'Failed to get USDT0 quote')
+        setError(quote.error || 'Failed to get USD₮0 quote')
         return
       }
 
-      const lzFeeHbar = Number(quote.nativeFee) / 1e18 // weibar to HBAR
+      const lzFeeHbar = Number(quote.nativeFee) / 1e8 // tinybars to HBAR (Hedera EVM uses tinybars for msg.value)
 
       // 2. Get initial Arbitrum USDT0 balance for tracking
       let initialBalance = '0'
@@ -526,17 +536,17 @@ export function useBridge() {
       }
 
       // 3. Sign and execute via KMS
-      setStatus('approving', 'Approving USDT0 for bridge...')
+      setStatus('approving', 'Approving USD₮0 for bridge...')
       const bridgeResult = await signBridgeUsdt0(amount, receiverAddress, requestGasDrop, lzFeeHbar)
       const transactionId = bridgeResult.transactionId
 
       setState(prev => ({ ...prev, transactionId }))
 
-      // 4. Track delivery (same LZ tracking)
-      await trackBridge(transactionId, receiverAddress, initialBalance)
+      // 4. Track delivery
+      await trackBridge(transactionId, receiverAddress, initialBalance, 'usdt0')
     } catch (error: any) {
       console.error('[USDT0 Bridge] Error:', error)
-      const msg = error.message || 'USDT0 bridge failed'
+      const msg = error.message || 'USD₮0 bridge failed'
       if (msg.includes('INSUFFICIENT_PAYER_BALANCE')) {
         setError('Insufficient HBAR to pay bridge fees.')
       } else {
@@ -546,51 +556,227 @@ export function useBridge() {
   }, [account, isConnected, signBridgeUsdt0, setStatus, setError, trackBridge])
 
   /**
-   * Bridge USDT0 from Arbitrum to Hedera via OFT (KMS custodial)
+   * Bridge USDT0 from Arbitrum to Hedera via OFT
+   * Supports both KMS (custodial native) and MetaMask (external wallet)
    */
   const bridgeUsdt0ToHedera = useCallback(async (
     amount: string,
-    hederaReceiverAccountId: string
+    hederaReceiverAccountId: string,
+    options?: { forceExternal?: boolean }
   ) => {
-    if (connectionMode !== 'custodial') {
-      setError('USDT0 reverse bridge requires custodial account')
+    // --- KMS PATH: custodial native wallet ---
+    if (connectionMode === 'custodial' && !options?.forceExternal) {
+      try {
+        setState(prev => ({
+          ...prev,
+          direction: 'arbitrum_to_hedera',
+          status: 'bridging',
+          statusMessage: 'Signing USD₮0 bridge via KMS...',
+          error: null,
+          transactionId: null,
+        }))
+
+        const token = session?.access_token
+        if (!token) throw new Error('Not authenticated')
+
+        const res = await fetch('/api/kms/sign-bridge-usdt0-reverse', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ amount }),
+        })
+
+        const data = await res.json()
+        if (!data.success) {
+          throw new Error(data.error || 'USD₮0 bridge reverse failed')
+        }
+
+        setState(prev => ({ ...prev, transactionId: data.txHash }))
+        await trackArbToHedera(data.txHash)
+      } catch (err: any) {
+        console.error('[USDT0 Bridge] Custodial Arb->Hedera error:', err)
+        setError(err.message || 'USD₮0 bridge failed')
+      }
       return
     }
 
+    // --- WALLET PATH: MetaMask flow via ethers Web3Provider ---
+    if (!window.ethereum) {
+      setError('MetaMask or an EVM wallet is required for USD₮0 bridging')
+      return
+    }
+
+    setState(prev => ({
+      ...prev,
+      direction: 'arbitrum_to_hedera',
+      status: 'quoting',
+      statusMessage: 'Getting USD₮0 LayerZero quote...',
+      error: null,
+      transactionId: null,
+    }))
+
     try {
-      setState(prev => ({
-        ...prev,
-        direction: 'arbitrum_to_hedera',
-        status: 'bridging',
-        statusMessage: 'Signing USDT0 bridge via KMS...',
-        error: null,
-        transactionId: null,
-      }))
+      const { ethers } = await import('ethers')
+      const receiverEvmAddress = accountIdToEvmAddress(hederaReceiverAccountId)
+      const amountRaw = Math.floor(parseFloat(amount) * 1_000_000)
 
-      const token = session?.access_token
-      if (!token) throw new Error('Not authenticated')
+      // 1. Connect MetaMask via Web3Provider
+      console.log('[USDT0 Bridge] Step 1: Connecting MetaMask...')
+      const web3Provider = new ethers.providers.Web3Provider(window.ethereum as any)
+      await web3Provider.send('eth_requestAccounts', [])
+      const signer = web3Provider.getSigner()
+      const sender = await signer.getAddress()
+      console.log('[USDT0 Bridge] Step 1 OK: sender =', sender)
 
-      const res = await fetch('/api/kms/sign-bridge-usdt0-reverse', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ amount }),
-      })
+      // Ensure Arbitrum network
+      const network = await web3Provider.getNetwork()
+      if (network.chainId !== 42161) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0xa4b1' }],
+          })
+        } catch {
+          setError('Please switch to Arbitrum One network in MetaMask')
+          return
+        }
+      }
+      console.log('[USDT0 Bridge] Step 1 OK: chainId =', network.chainId)
 
-      const data = await res.json()
-      if (!data.success) {
-        throw new Error(data.error || 'USDT0 bridge reverse failed')
+      // 2. Check USDT0 balance via server API (avoids MetaMask RPC issues)
+      console.log('[USDT0 Bridge] Step 2: Checking balance...')
+      setStatus('quoting', 'Checking USD₮0 balance...')
+      try {
+        const balRes = await fetch(`/api/bridge/arbitrum-balance?address=${sender}`)
+        const balData = await balRes.json()
+        if (balData.success) {
+          const usdt0Balance = BigInt(balData.usdt0Balance || '0')
+          console.log('[USDT0 Bridge] Step 2 OK: balance =', usdt0Balance.toString())
+          if (usdt0Balance < BigInt(amountRaw)) {
+            const balanceUsdt0 = truncateBalance(Number(usdt0Balance) / 1_000_000)
+            setError(`Insufficient USD₮0 on Arbitrum. You have ${balanceUsdt0} USD₮0 but need ${amount} USD₮0.`)
+            return
+          }
+        }
+      } catch {
+        console.warn('[USDT0 Bridge] Step 2: Balance check failed, continuing...')
       }
 
-      setState(prev => ({ ...prev, transactionId: data.txHash }))
+      // 3. Get OFT quote via server API (reliable RPC with fallback)
+      console.log('[USDT0 Bridge] Step 3: Getting quote...')
+      setStatus('quoting', 'Getting LayerZero quote...')
+      const sendParam = buildSendParam(
+        USDT0_LZ_CONFIG.HEDERA_EID,
+        receiverEvmAddress,
+        amountRaw,
+        false
+      )
+      const quoteRes = await fetch('/api/bridge/quote-usdt0', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          receiver: receiverEvmAddress,
+          direction: 'arbitrum_to_hedera',
+          requestGasDrop: false,
+        }),
+      })
+      const quoteData = await quoteRes.json()
+      if (!quoteData.success) {
+        setError(quoteData.error || 'Failed to get USD₮0 quote')
+        return
+      }
+      const nativeFee = ethers.BigNumber.from(quoteData.nativeFee)
+      const feeWithBuffer = nativeFee.mul(120).div(100)
+      console.log('[USDT0 Bridge] Step 3 OK: nativeFee =', nativeFee.toString())
 
-      // Track via LayerZero
-      await trackArbToHedera(data.txHash)
-    } catch (err: any) {
-      console.error('[USDT0 Bridge] Arb->Hedera error:', err)
-      setError(err.message || 'USDT0 bridge failed')
+      // 4. Check allowance via server API, approve via MetaMask if needed
+      console.log('[USDT0 Bridge] Step 4: Checking allowance...')
+      setStatus('approving', 'Checking USD₮0 allowance...')
+      const allowanceRes = await fetch(
+        `/api/bridge/arbitrum-allowance?owner=${sender}&spender=${USDT0_ARBITRUM.OFT_ADDRESS}&token=${USDT0_ARBITRUM.TOKEN_ADDRESS}`
+      )
+      const allowanceData = await allowanceRes.json()
+      const currentAllowance = ethers.BigNumber.from(allowanceData.allowance || '0')
+      console.log('[USDT0 Bridge] Step 4 OK: allowance =', currentAllowance.toString())
+
+      if (currentAllowance.lt(amountRaw)) {
+        console.log('[USDT0 Bridge] Step 4b: Requesting approval...')
+        setStatus('approving', 'Approve USD₮0 in MetaMask...')
+        const ERC20_ABI = [
+          'function approve(address spender, uint256 amount) returns (bool)',
+        ]
+        const usdt0Token = new ethers.Contract(USDT0_ARBITRUM.TOKEN_ADDRESS, ERC20_ABI, signer)
+        const approveAmount = ethers.BigNumber.from(amountRaw).mul(10)
+        const approveTx = await usdt0Token.approve(USDT0_ARBITRUM.OFT_ADDRESS, approveAmount, {
+          gasLimit: USDT0_GAS_CONFIG.ARBITRUM_APPROVE_GAS,
+        })
+        setStatus('approving', 'Waiting for approval confirmation...')
+        await approveTx.wait()
+        console.log('[USDT0 Bridge] Step 4b OK: approved')
+      }
+
+      // 5. Execute OFT.send() via MetaMask
+      console.log('[USDT0 Bridge] Step 5: Sending OFT bridge tx...')
+      setStatus('bridging', 'Confirm USD₮0 bridge in MetaMask...')
+      const sendParamTuple = [
+        sendParam.dstEid,
+        sendParam.to,
+        sendParam.amountLD,
+        sendParam.minAmountLD,
+        sendParam.extraOptions,
+        sendParam.composeMsg,
+        sendParam.oftCmd,
+      ]
+      console.log('[USDT0 Bridge] Step 5 params:', {
+        oft: USDT0_ARBITRUM.OFT_ADDRESS,
+        dstEid: sendParam.dstEid,
+        to: sendParam.to,
+        amountLD: sendParam.amountLD,
+        nativeFee: nativeFee.toString(),
+        value: feeWithBuffer.toString(),
+      })
+
+      const oftContract = new ethers.Contract(USDT0_ARBITRUM.OFT_ADDRESS, OFT_ABI, signer)
+      const bridgeTx = await oftContract.send(
+        sendParamTuple,
+        [feeWithBuffer, 0],
+        sender,
+        {
+          value: feeWithBuffer,
+          gasLimit: USDT0_GAS_CONFIG.ARBITRUM_OFT_SEND_GAS,
+        }
+      )
+      console.log('[USDT0 Bridge] Step 5 OK: txHash =', bridgeTx.hash)
+
+      setState(prev => ({ ...prev, transactionId: bridgeTx.hash }))
+
+      // Wait for on-chain confirmation (MetaMask RPC can be flaky, so don't fail on this)
+      setStatus('bridging', 'Waiting for transaction confirmation...')
+      try {
+        await bridgeTx.wait()
+      } catch (waitErr) {
+        console.warn('[USDT0 Bridge] wait() failed (tx already submitted):', waitErr)
+      }
+
+      // 6. Track via LayerZero
+      await trackArbToHedera(bridgeTx.hash)
+    } catch (error: any) {
+      console.error('[USDT0 Bridge] Arb->Hedera error:', error)
+      console.error('[USDT0 Bridge] Error details:', JSON.stringify({
+        code: error?.code,
+        reason: error?.reason,
+        message: error?.message,
+        data: error?.data,
+      }, null, 2))
+      const msg = error?.reason || error?.data?.message || error?.message || 'USD₮0 bridge failed'
+      if (msg.includes('rejected') || msg.includes('denied') || error?.code === 4001) {
+        setError('Transaction rejected by user')
+      } else {
+        setError(msg)
+      }
     }
   }, [connectionMode, session, setStatus, setError, trackArbToHedera])
 

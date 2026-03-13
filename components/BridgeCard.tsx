@@ -23,6 +23,7 @@ import { USDT0_HEDERA } from '@/lib/bridge/usdt0Constants'
 import { formatAmount, truncateBalance } from '@/utils/amountValidation'
 
 type BridgeToken = 'USDC' | 'USDT0'
+const TOKEN_DISPLAY: Record<BridgeToken, string> = { USDC: 'USDC', USDT0: 'USD₮0' }
 
 interface LiquidityInfo {
   availableBalance: string
@@ -339,7 +340,8 @@ export function BridgeCard() {
         await bridge.bridgeUsdt0ToArbitrum(amount, receiver, useGasDrop)
       } else {
         if (!account) return
-        await bridge.bridgeUsdt0ToHedera(amount, account)
+        const forceExternal = isCustodial && walletMode === 'external'
+        await bridge.bridgeUsdt0ToHedera(amount, account, forceExternal ? { forceExternal: true } : undefined)
       }
     } else {
       if (direction === 'hedera_to_arbitrum') {
@@ -398,29 +400,64 @@ export function BridgeCard() {
         </div>
       </div>
 
-      {/* Token Selection Tabs */}
-      <div className="flex gap-2 mb-4">
-        {(['USDC', 'USDT0'] as BridgeToken[]).map((token) => (
+      {/* Token Slide Toggle */}
+      <div className="flex justify-center mb-5">
+        <div className="relative flex bg-neutral-800/80 backdrop-blur-sm rounded-full p-1 border border-white/[0.04] overflow-hidden">
+          {/* Sliding backdrop */}
+          <div
+            className="absolute top-1 bottom-1 rounded-full transition-all duration-400 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+            style={{
+              left: selectedToken === 'USDC' ? '4px' : 'calc(50% + 2px)',
+              right: selectedToken === 'USDC' ? 'calc(50% + 2px)' : '4px',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%)',
+              boxShadow: selectedToken === 'USDC'
+                ? '0 0 20px rgba(39,117,202,0.15), inset 0 1px 0 rgba(255,255,255,0.08)'
+                : '0 0 20px rgba(38,161,123,0.15), inset 0 1px 0 rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}
+          />
+          {/* USDC option */}
           <button
-            key={token}
-            onClick={() => switchToken(token)}
+            onClick={() => switchToken('USDC')}
             disabled={bridge.isExecuting}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              selectedToken === token
-                ? 'bg-white text-black'
-                : 'bg-neutral-800 text-neutral-400 hover:text-white'
-            }`}
+            className="relative z-10 flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-full transition-all duration-300 disabled:opacity-50 group"
           >
-            {token}
+            <div className={`relative w-6 h-6 rounded-full overflow-hidden ring-1 transition-all duration-300 ${
+              selectedToken === 'USDC' ? 'ring-white/20 shadow-[0_0_8px_rgba(39,117,202,0.3)]' : 'ring-transparent opacity-50 group-hover:opacity-80'
+            }`}>
+              <Image src={USDC_ICON_URL} alt="USDC" width={24} height={24} className="w-full h-full object-cover" />
+            </div>
+            <span className={`text-sm font-semibold tracking-wide transition-all duration-300 ${
+              selectedToken === 'USDC' ? 'text-white' : 'text-white/40 group-hover:text-white/60'
+            }`}>
+              USDC
+            </span>
           </button>
-        ))}
+          {/* USDT0 option */}
+          <button
+            onClick={() => switchToken('USDT0')}
+            disabled={bridge.isExecuting}
+            className="relative z-10 flex-1 flex items-center justify-center gap-2 px-5 py-2 rounded-full transition-all duration-300 disabled:opacity-50 group"
+          >
+            <div className={`relative w-6 h-6 rounded-full overflow-hidden bg-[#26A17B] ring-1 transition-all duration-300 ${
+              selectedToken === 'USDT0' ? 'ring-white/20 shadow-[0_0_8px_rgba(38,161,123,0.3)]' : 'ring-transparent opacity-50 group-hover:opacity-80'
+            }`}>
+              <Image src={USDT0_ICON_URL} alt="USDT0" width={24} height={24} className="w-full h-full object-cover scale-110" />
+            </div>
+            <span className={`text-sm font-semibold tracking-wide transition-all duration-300 ${
+              selectedToken === 'USDT0' ? 'text-white' : 'text-white/40 group-hover:text-white/60'
+            }`}>
+              USD₮0
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* USDT0 association status */}
       {selectedToken === 'USDT0' && isConnected && (isAssociating || isCheckingAssoc) && (
         <div className="flex items-center gap-2 text-blue-400 text-xs bg-blue-500/10 p-2.5 rounded-2xl mb-3">
           <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
-          <span>{isAssociating ? 'Associating USDT0 to your account...' : 'Checking USDT0 association...'}</span>
+          <span>{isAssociating ? 'Associating USD₮0 to your account...' : 'Checking USD₮0 association...'}</span>
         </div>
       )}
 
@@ -429,7 +466,7 @@ export function BridgeCard() {
         <div className="flex-1 pr-4">
           <TokenSelector
             label="From"
-            selectedToken={{ icon: tokenIcon, symbol: selectedToken, name: fromNetwork } as any}
+            selectedToken={{ icon: tokenIcon, symbol: TOKEN_DISPLAY[selectedToken], name: fromNetwork } as any}
             badge={direction === 'hedera_to_arbitrum' ? <HederaNetworkBadge /> : <ArbitrumNetworkBadge />}
           />
         </div>
@@ -447,7 +484,7 @@ export function BridgeCard() {
         <div className="flex-1 pl-4">
           <TokenSelector
             label="To"
-            selectedToken={{ icon: tokenIcon, symbol: selectedToken, name: toNetwork } as any}
+            selectedToken={{ icon: tokenIcon, symbol: TOKEN_DISPLAY[selectedToken], name: toNetwork } as any}
             badge={direction === 'hedera_to_arbitrum' ? <ArbitrumNetworkBadge /> : <HederaNetworkBadge />}
           />
         </div>
@@ -492,7 +529,7 @@ export function BridgeCard() {
           className="w-full bg-transparent text-2xl font-semibold text-white placeholder:text-white/30 focus:outline-none disabled:opacity-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
         <div className="flex items-center justify-between mt-1">
-          <span className="text-white/50 text-xs">{selectedToken}</span>
+          <span className="text-white/50 text-xs">{TOKEN_DISPLAY[selectedToken]}</span>
           <div className="flex items-center gap-2 text-xs">
             {/* User's balance */}
             {isConnected && direction === 'hedera_to_arbitrum' && (
@@ -502,7 +539,7 @@ export function BridgeCard() {
                 ) : activeHederaBalance !== null ? (
                   <>
                     Bal: <span className={`font-semibold ${hasInsufficientHederaBalance ? 'text-red-400' : 'text-white/70'}`}>
-                      {truncateBalance(parseFloat(activeHederaBalance))} {selectedToken}
+                      {truncateBalance(parseFloat(activeHederaBalance))} {TOKEN_DISPLAY[selectedToken]}
                     </span>
                   </>
                 ) : (
@@ -513,7 +550,7 @@ export function BridgeCard() {
             {isConnected && isArbToHedera && activeEvmTokenBalance && (
               <span className="text-white/50">
                 Bal: <span className={`font-semibold ${!hasEnoughEvmBalance ? 'text-red-400' : 'text-white/70'}`}>
-                  {activeEvmTokenBalance} {selectedToken}
+                  {activeEvmTokenBalance} {TOKEN_DISPLAY[selectedToken]}
                 </span>
               </span>
             )}
@@ -546,7 +583,7 @@ export function BridgeCard() {
       {hasInsufficientHederaBalance && (
         <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 p-2.5 rounded-2xl mt-3">
           <Info className="w-3.5 h-3.5 flex-shrink-0" />
-          <span>Insufficient {selectedToken} balance. You have {truncateBalance(parseFloat(activeHederaBalance!))} {selectedToken}.</span>
+          <span>Insufficient {TOKEN_DISPLAY[selectedToken]} balance. You have {truncateBalance(parseFloat(activeHederaBalance!))} {TOKEN_DISPLAY[selectedToken]}.</span>
         </div>
       )}
 
@@ -610,7 +647,7 @@ export function BridgeCard() {
                   {custodialEvmAddress.slice(0, 6)}...{custodialEvmAddress.slice(-4)}
                 </span>
                 <span className="text-xs text-green-400 flex-shrink-0 ml-2">
-                  {custodialEvmBalance ? `${selectedToken === 'USDT0' ? custodialEvmBalance.usdt0 : custodialEvmBalance.usdc} ${selectedToken}` : <Loader2 className="w-3 h-3 animate-spin inline" />}
+                  {custodialEvmBalance ? `${selectedToken === 'USDT0' ? custodialEvmBalance.usdt0 : custodialEvmBalance.usdc} ${TOKEN_DISPLAY[selectedToken]}` : <Loader2 className="w-3 h-3 animate-spin inline" />}
                 </span>
               </div>
               <p className="text-xs text-white/30 mt-1">KMS-managed wallet</p>
@@ -621,7 +658,7 @@ export function BridgeCard() {
                 {evmAccount.slice(0, 6)}...{evmAccount.slice(-4)}
               </span>
               <span className="text-xs text-green-400 flex-shrink-0 ml-2">
-                {evmBalance ? `${selectedToken === 'USDT0' ? evmBalance.usdt0 : evmBalance.usdc} ${selectedToken}` : <Loader2 className="w-3 h-3 animate-spin inline" />}
+                {evmBalance ? `${selectedToken === 'USDT0' ? evmBalance.usdt0 : evmBalance.usdc} ${TOKEN_DISPLAY[selectedToken]}` : <Loader2 className="w-3 h-3 animate-spin inline" />}
               </span>
             </div>
           ) : !useNativeWallet ? (
@@ -638,7 +675,7 @@ export function BridgeCard() {
             </button>
           ) : null}
           {activeEvmBalance && amountFloat > 0 && !hasEnoughEvmBalance && (
-            <p className="text-xs text-red-400 mt-1">Insufficient {selectedToken} balance</p>
+            <p className="text-xs text-red-400 mt-1">Insufficient {TOKEN_DISPLAY[selectedToken]} balance</p>
           )}
           {lowEthForGas && (
             <p className="text-xs text-yellow-500 mt-1">Low ETH for gas fees</p>
@@ -761,7 +798,7 @@ export function BridgeCard() {
           </div>
           <div className="flex justify-between border-t border-white/5 pt-2 font-medium">
             <span className="text-white/70">You Receive</span>
-            <span className="text-green-400">{truncateBalance(effectiveAmountAfterFee)} {selectedToken}</span>
+            <span className="text-green-400">{truncateBalance(effectiveAmountAfterFee)} {TOKEN_DISPLAY[selectedToken]}</span>
           </div>
         </div>
       )}
@@ -797,11 +834,11 @@ export function BridgeCard() {
                 Bridging...
               </span>
             ) : hasInsufficientHederaBalance ? (
-              `Insufficient ${selectedToken}`
+              `Insufficient ${TOKEN_DISPLAY[selectedToken]}`
             ) : !hasEnoughEvmBalance ? (
-              `Insufficient ${selectedToken}`
+              `Insufficient ${TOKEN_DISPLAY[selectedToken]}`
             ) : (
-              `Bridge ${amountFloat > 0 ? truncateBalance(amountFloat) + ' ' : ''}${selectedToken}`
+              `Bridge ${amountFloat > 0 ? truncateBalance(amountFloat) + ' ' : ''}${TOKEN_DISPLAY[selectedToken]}`
             )}
           </button>
         )}

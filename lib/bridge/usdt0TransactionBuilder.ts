@@ -37,7 +37,7 @@ export async function fetchUsdt0Quote(
         nativeFee: '0',
         nativeFeeFormatted: '0',
         direction,
-        error: data.error || 'Failed to get USDT0 quote',
+        error: data.error || 'Failed to get USD₮0 quote',
       }
     }
 
@@ -54,7 +54,7 @@ export async function fetchUsdt0Quote(
       nativeFee: '0',
       nativeFeeFormatted: '0',
       direction,
-      error: 'Network error while fetching USDT0 quote',
+      error: 'Network error while fetching USD₮0 quote',
     }
   }
 }

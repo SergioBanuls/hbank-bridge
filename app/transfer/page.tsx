@@ -39,7 +39,7 @@ export default function TransferPage() {
   const arbTokens = useMemo<Token[]>(() => [
     { symbol: 'ETH', name: 'Ethereum', address: 'arb:eth', decimals: 18, icon: '/EthLogo.png' } as Token,
     { symbol: 'USDC', name: 'USD Coin', address: 'arb:usdc', decimals: 6, icon: 'https://dwk1opv266jxs.cloudfront.net/icons/tokens/0.0.456858.png' } as Token,
-    { symbol: 'USDT0', name: 'Tether (OFT)', address: 'arb:usdt0', decimals: 6, icon: 'https://assets.coingecko.com/coins/images/325/small/Tether.png' } as Token,
+    { symbol: 'USD₮0', name: 'Tether (OFT)', address: 'arb:usdt0', decimals: 6, icon: 'https://assets.coingecko.com/coins/images/325/small/Tether.png' } as Token,
   ], [])
 
   // All tokens (including HBAR) with balance > 0

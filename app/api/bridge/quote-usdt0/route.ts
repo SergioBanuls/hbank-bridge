@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ethers } from 'ethers'
 import { OFT_ABI, USDT0_HEDERA, USDT0_ARBITRUM, USDT0_LZ_CONFIG, buildSendParam } from '@/lib/bridge/usdt0Constants'
+import { getArbitrumProvider } from '@/lib/bridge/arbitrumRpc'
 
 const HEDERA_RPC = process.env.HEDERA_RPC_URL || 'https://mainnet.hashio.io/api'
 
@@ -83,49 +84,42 @@ export async function POST(request: NextRequest) {
       false, // payInLzToken
     ])
 
-    // Determine which OFT contract and RPC to use
-    let rpcUrl: string
+    // Determine which OFT contract to use and get provider
     let oftAddress: string
+    let provider: ethers.providers.JsonRpcProvider
 
     if (isHederaToArb) {
-      rpcUrl = HEDERA_RPC
       oftAddress = USDT0_HEDERA.OFT_ADDRESS
+      provider = new ethers.providers.JsonRpcProvider(
+        { url: HEDERA_RPC, skipFetchSetup: true },
+        295
+      )
     } else {
-      rpcUrl = process.env.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc'
       oftAddress = USDT0_ARBITRUM.OFT_ADDRESS
+      provider = await getArbitrumProvider()
     }
 
-    // Call via JSON-RPC
-    const rpcResponse = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'eth_call',
-        params: [{ to: oftAddress, data: calldata }, 'latest'],
-        id: 1,
-      }),
-    })
-
-    if (!rpcResponse.ok) {
-      throw new Error(`RPC request failed: ${rpcResponse.status}`)
-    }
-
-    const rpcResult = await rpcResponse.json()
-    if (rpcResult.error) {
-      throw new Error(rpcResult.error.message || 'RPC error')
-    }
-
-    // Decode result: returns MessagingFee (nativeFee, lzTokenFee)
-    const decoded = iface.decodeFunctionResult('quoteSend', rpcResult.result)
-    const nativeFee = decoded[0].nativeFee || decoded[0][0]
+    // Call quoteSend via ethers provider
+    const oftContract = new ethers.Contract(oftAddress, OFT_ABI, provider)
+    const messagingFee = await oftContract.quoteSend(
+      [
+        sendParam.dstEid,
+        sendParam.to,
+        sendParam.amountLD,
+        sendParam.minAmountLD,
+        sendParam.extraOptions,
+        sendParam.composeMsg,
+        sendParam.oftCmd,
+      ],
+      false
+    )
+    const nativeFee = messagingFee.nativeFee || messagingFee[0]
 
     // Format fee based on direction
     let nativeFeeFormatted: string
     if (isHederaToArb) {
-      // Hedera EVM returns weibar (18 decimals), convert to HBAR
-      // weibar / 1e10 = tinybar, tinybar / 1e8 = HBAR => weibar / 1e18 = HBAR
-      nativeFeeFormatted = `${(Number(nativeFee) / 1e18).toFixed(4)} HBAR`
+      // Hedera OFT quoteSend returns nativeFee in tinybars (10^-8 HBAR)
+      nativeFeeFormatted = `${(Number(nativeFee) / 1e8).toFixed(4)} HBAR`
     } else {
       // Arbitrum: fee in wei (18 decimals)
       nativeFeeFormatted = `${ethers.utils.formatEther(nativeFee)} ETH`
@@ -139,7 +133,7 @@ export async function POST(request: NextRequest) {
     }, { headers: securityHeaders })
   } catch (error) {
     const err = error as { message?: string; reason?: string }
-    const message = err.message || 'Failed to get USDT0 quote'
+    const message = err.message || 'Failed to get USD₮0 quote'
     console.error('[USDT0 Quote] Error:', message)
 
     if (message.includes('could not detect network')) {
