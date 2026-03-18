@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     // 4. Record success
     await recordSigningOperation(ctx, 'token_association', {
       tokenId: body.tokenId,
-    }, { transactionId })
+    }, { transactionId }).catch(err => console.warn('Failed to record association audit:', err))
 
     return NextResponse.json({
       success: true,

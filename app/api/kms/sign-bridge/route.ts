@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       receiverAddress: body.receiverAddress,
       requestGasDrop: body.requestGasDrop,
       lzFeeHbar: body.lzFeeHbar,
-    }, { transactionId })
+    }, { transactionId }).catch(err => console.warn('Failed to record bridge audit:', err))
 
     return NextResponse.json({
       success: true,

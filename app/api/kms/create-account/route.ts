@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     // 4. Create Hedera account with KMS public key
     console.log(`Creating Hedera account with KMS key ${kmsKey.keyId}...`)
-    const hederaAccountId = await createHederaAccountWithKMSKey(kmsKey.publicKeyHex)
+    const { accountId: hederaAccountId, transactionId } = await createHederaAccountWithKMSKey(kmsKey.publicKeyHex)
 
     // 5. Derive EVM address from public key
     const evmAddress = deriveEvmAddress(kmsKey.publicKeyHex)
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     await db.from(TABLES.KMS_SIGNING_AUDIT).insert({
       user_id: user.id,
       transaction_type: 'account_create',
-      transaction_id: null,
+      transaction_id: transactionId,
       transaction_params: { hedera_account_id: hederaAccountId } as any,
       kms_key_id: kmsKey.keyId,
       ip_address: getClientIP(request),

@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       new_kms_key_id: newKeyResult.keyId,
       old_evm_address: oldEvmAddress,
       new_evm_address: newEvmAddress,
-    }, { transactionId: txId })
+    }, { transactionId: txId }).catch(err => console.warn('Failed to record key_rotation audit:', err))
 
     return NextResponse.json({
       success: true,

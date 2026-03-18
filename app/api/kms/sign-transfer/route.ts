@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       recipientAccountId: body.recipientAccountId,
       amount: body.amount,
       tokenId: body.tokenId,
-    }, { transactionId })
+    }, { transactionId }).catch(err => console.warn('Failed to record transfer audit:', err))
 
     return NextResponse.json({
       success: true,

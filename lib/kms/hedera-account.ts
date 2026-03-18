@@ -67,7 +67,7 @@ function createCreatorClient(): Client {
  */
 export async function createHederaAccountWithKMSKey(
   publicKeyHex: string
-): Promise<string> {
+): Promise<{ accountId: string; transactionId: string }> {
   const client = createCreatorClient()
 
   try {
@@ -93,9 +93,10 @@ export async function createHederaAccountWithKMSKey(
 
     const receipt = await createTx.getReceipt(client)
     const newAccountId = receipt.accountId!.toString()
+    const transactionId = createTx.transactionId!.toString()
 
-    console.log(`Hedera account created: ${newAccountId}`)
-    return newAccountId
+    console.log(`Hedera account created: ${newAccountId} (tx: ${transactionId})`)
+    return { accountId: newAccountId, transactionId }
   } finally {
     client.close()
   }

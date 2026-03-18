@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
       amount,
       token,
       evmAddress,
-    }, { transactionId: receipt.transactionHash })
+    }, { transactionId: receipt.transactionHash }).catch(err => console.warn('Failed to record transfer_evm audit:', err))
 
     return NextResponse.json({
       success: true,

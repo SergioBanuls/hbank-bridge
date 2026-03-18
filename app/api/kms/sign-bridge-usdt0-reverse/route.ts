@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
       receiverEvmAddress,
       requestGasDrop: body.requestGasDrop || false,
       nativeFeeWei: nativeFee.toString(),
-    }, { transactionId: receipt.transactionHash })
+    }, { transactionId: receipt.transactionHash }).catch(err => console.warn('Failed to record bridge_usdt0_reverse audit:', err))
 
     return NextResponse.json({
       success: true,

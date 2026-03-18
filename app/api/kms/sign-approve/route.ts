@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       tokenId: body.tokenId,
       amount: body.amount,
       spender: body.spenderAccountId,
-    }, { transactionId })
+    }, { transactionId }).catch(err => console.warn('Failed to record approval audit:', err))
 
     return NextResponse.json({
       success: true,

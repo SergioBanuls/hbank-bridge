@@ -10,6 +10,7 @@ import { memo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { ShieldCheck } from 'lucide-react';
 import { useConnectionContext } from '@/contexts/ConnectionContext';
 import { SessionActionButtons } from './SessionActionButtons';
 
@@ -72,7 +73,22 @@ export const Header = memo(function Header() {
             </nav>
           </div>
 
-          <SessionActionButtons />
+          <div className="flex items-center gap-3">
+            {isConnected && (
+              <Link
+                href="/audit"
+                className={`p-2 rounded-full transition-colors ${
+                  pathname === '/audit'
+                    ? 'bg-white/10 text-emerald-400'
+                    : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+                }`}
+                title="Audit Log"
+              >
+                <ShieldCheck className="w-5 h-5" />
+              </Link>
+            )}
+            <SessionActionButtons />
+          </div>
 
         </div >
       </div >

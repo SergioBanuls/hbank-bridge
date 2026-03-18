@@ -106,7 +106,7 @@ export async function recordSigningOperation(
   const db = supabaseAdmin()
 
   // Audit log
-  await db.from(TABLES.KMS_SIGNING_AUDIT).insert({
+  const { error: insertError } = await db.from(TABLES.KMS_SIGNING_AUDIT).insert({
     user_id: ctx.userId,
     transaction_type: txType,
     transaction_id: result.transactionId || null,
@@ -116,6 +116,10 @@ export async function recordSigningOperation(
     status: result.error ? 'failed' : 'success',
     error_message: result.error || null,
   })
+
+  if (insertError) {
+    console.error('Failed to insert audit log:', insertError)
+  }
 
   // Increment rate limit counters (only on success) via RPC
   if (!result.error) {
