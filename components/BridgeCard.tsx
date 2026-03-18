@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { LoginDialog } from './auth/LoginDialog'
+import { FundAccountDialog } from './FundAccountDialog'
 import { Fuel, Info, Loader2, Wallet, Shield, Globe } from 'lucide-react'
 import Image from 'next/image'
 import { TokenSelector } from './TokenSelector'
@@ -78,6 +79,7 @@ export function BridgeCard() {
   const [walletMode, setWalletMode] = useState<WalletMode>('native')
   const [selectedToken, setSelectedToken] = useState<BridgeToken>('USDC')
   const [loginOpen, setLoginOpen] = useState(false)
+  const [showFundDialog, setShowFundDialog] = useState(false)
   const [amount, setAmount] = useState('')
   const [receiverAddress, setReceiverAddress] = useState('')
   const [useGasDrop, setUseGasDrop] = useState(false)
@@ -110,12 +112,17 @@ export function BridgeCard() {
   const { associateToken, isAssociating } = useAssociateToken()
 
   // Auto-associate USDT0 when selected and not yet associated
+  // Requires HBAR balance to pay for the on-chain transaction
   useEffect(() => {
-    if (selectedToken !== 'USDT0' || !isConnected || isCheckingAssoc || isUsdt0Associated || isAssociating) return
+    if (selectedToken !== 'USDT0' || !isConnected || isCheckingAssoc || isUsdt0Associated || isAssociating || hederaBalancesLoading) return
+    if (hbarBalance < 1) {
+      setShowFundDialog(true)
+      return
+    }
     associateToken(USDT0_HEDERA.TOKEN_ID).then((success) => {
       if (success) refreshAssoc()
     })
-  }, [selectedToken, isConnected, isCheckingAssoc, isUsdt0Associated, isAssociating, associateToken, refreshAssoc])
+  }, [selectedToken, isConnected, isCheckingAssoc, isUsdt0Associated, isAssociating, associateToken, refreshAssoc, hbarBalance, hederaBalancesLoading])
 
   // Active balance based on selected token
   const activeHederaBalance = selectedToken === 'USDT0' ? formattedUsdt0Balance : formattedUsdcBalance
@@ -866,6 +873,15 @@ export function BridgeCard() {
         hederaTxHash={bridge.hederaTxHash}
         error={bridge.error}
       />
+
+      {/* Fund account dialog — shown when HBAR is needed for token association */}
+      {account && (
+        <FundAccountDialog
+          open={showFundDialog}
+          onOpenChange={setShowFundDialog}
+          accountId={account}
+        />
+      )}
     </div>
   )
 }
