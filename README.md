@@ -21,10 +21,10 @@ HBank Bridge abstracts away all wallet complexity. Users sign up with an email o
 ## Key Features
 
 ### Cross-Chain Bridge (Hedera <> Arbitrum)
-- Bi-directional **USDC bridging** via the **LayerZero OFT** protocol
+- Bi-directional **USDC** and **USD₮0** bridging via the **LayerZero OFT** protocol
 - Optional **gas drop**: ~$2 in ETH airdropped to the receiver on Arbitrum so they can transact immediately
 - Real-time bridge status tracking with adaptive polling via LayerZero Scan
-- 0.3% bridge fee — transparent and predictable
+- 0.3% bridge fee on USDC — USD₮0 bridges are fee-free (only LayerZero gas)
 
 ### Custodial Key Management (Core Innovation)
 - Private keys live **exclusively inside AWS KMS HSMs** — they can never be exported
@@ -32,6 +32,7 @@ HBank Bridge abstracts away all wallet complexity. Users sign up with an email o
 - The same key signs both **Hedera** and **EVM (Arbitrum)** transactions — one cryptographic identity on two chains (HIP-583 compatible)
 - User-initiated **key rotation** with dual-signature verification
 - Full **audit trail**: every signing operation is logged at both application level (Supabase) and infrastructure level (AWS CloudTrail)
+- **Audit Log UI**: dedicated `/audit` page with filterable, paginated table showing all KMS signing operations — transaction type, status, params, KMS key ID, IP, and links to block explorers
 
 ### Multi-Chain Transfers
 - Send **HBAR**, any **HTS token**, **ETH**, and **USDC**
@@ -126,7 +127,7 @@ This works identically for both Hedera (via `@hashgraph/sdk`) and Arbitrum (via 
 | **Authorization** | Row-Level Security (RLS) — users can only access their own data |
 | **Rate Limiting** | 10 signing operations/hour, 50/day per user |
 | **Input Validation** | Server-side validation of all transaction parameters |
-| **Audit** | Dual-layer: application-level Supabase table + AWS CloudTrail |
+| **Audit** | Dual-layer: application-level Supabase table + AWS CloudTrail, with user-facing audit log UI |
 | **Transaction Safety** | All tx bodies built server-side — no client-constructed transactions |
 | **Key Rotation** | User-initiated, dual-signature (old + new key), old key disabled for audit |
 
@@ -163,7 +164,7 @@ The system creates a dedicated AWS KMS key (secp256k1) and uses it to create a H
 User sends HBAR to their new Hedera account to cover transaction fees.
 
 ### 4. Bridge
-User selects an amount of USDC to bridge from Hedera to Arbitrum (or vice versa). The server builds and signs all necessary transactions (approval + bridge call) using the user's KMS key. LayerZero handles cross-chain message delivery. Optional gas drop provides ETH on arrival.
+User selects an amount of USDC or USD₮0 to bridge from Hedera to Arbitrum (or vice versa). The server builds and signs all necessary transactions (approval + bridge call) using the user's KMS key. LayerZero handles cross-chain message delivery. Optional gas drop provides ETH on arrival. Accounts without HBAR are prompted to deposit before attempting token associations.
 
 ### 5. Transfer
 User can send HBAR, HTS tokens, ETH, or USDC to any address on either chain. All signing is handled server-side.
@@ -181,11 +182,13 @@ hbank-bridge/
 │   ├── bridge/              # Bridge page (main feature)
 │   ├── transfer/            # Multi-chain transfer page
 │   ├── portfolio/           # Portfolio dashboard
+│   ├── audit/               # KMS signing audit log
 │   ├── auth/callback/       # OAuth callback
 │   └── api/                 # Server-side API routes
 │       ├── auth/            #   Login, signup, logout
 │       ├── kms/             #   All custodial signing endpoints
 │       ├── bridge/          #   Quotes, tracking, balances
+│       ├── audit-logs/      #   Audit log queries (paginated, filterable)
 │       └── balances/        #   Token balance queries
 ├── components/              # React components
 │   ├── BridgeCard.tsx       #   Main bridge interface
@@ -193,7 +196,7 @@ hbank-bridge/
 │   ├── MissionsSheet.tsx    #   Missions, account, key rotation
 │   └── ui/                  #   shadcn/ui primitives
 ├── contexts/                # React contexts (auth, prices)
-├── hooks/                   # Custom hooks (bridge, balances, tokens)
+├── hooks/                   # Custom hooks (bridge, balances, tokens, audit)
 ├── lib/
 │   ├── kms/                 # AWS KMS integration
 │   │   ├── kms-client.ts    #   Key creation, signing, public key extraction
@@ -226,8 +229,23 @@ Built on the LayerZero OApp pattern with:
 2. **Hardware-grade security** — AWS KMS HSMs provide the same level of key protection used by banks, but accessible to any web user.
 3. **One key, two chains** — A single secp256k1 key creates a unified identity across Hedera and Arbitrum (EVM), enabled by HIP-583.
 4. **Server-side transaction building** — All transaction bodies are constructed on the server, eliminating an entire class of client-side attacks.
-5. **Complete audit trail** — Every operation is logged at application and infrastructure level, providing full transparency.
+5. **Complete audit trail** — Every operation is logged at application and infrastructure level, with a dedicated audit log page for users to inspect their own signing history.
 6. **Gamified onboarding** — Mission system with NFT rewards drives user engagement and cross-chain activity.
+
+---
+
+## Audit & Compliance
+
+Every KMS signing operation is recorded with:
+- **User ID**, **KMS key ID**, and **client IP address**
+- **Transaction type** (bridge, transfer, token_association, key_rotation, etc.)
+- **Transaction parameters** (amount, recipient, token, fees)
+- **Result** (success/failed + on-chain transaction ID or error message)
+- **Timestamp**
+
+Users can view their audit trail at `/audit` with filters by transaction type, status, and date range. Each row is expandable to show full transaction parameters and KMS key details, with links to HashScan (Hedera) or Arbiscan (Arbitrum).
+
+An implementation guide for replicating this system in other AWS KMS applications is available at [`docs/aws-kms-audit-logging-guide.md`](docs/aws-kms-audit-logging-guide.md).
 
 ---
 
