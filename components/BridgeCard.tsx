@@ -111,12 +111,25 @@ export function BridgeCard() {
   )
   const { associateToken, isAssociating } = useAssociateToken()
 
+  // Track whether we already showed the fund dialog for this token selection
+  const fundDialogShownRef = useRef(false)
+
+  // Reset the flag when user switches away from USDT0
+  useEffect(() => {
+    if (selectedToken !== 'USDT0') {
+      fundDialogShownRef.current = false
+    }
+  }, [selectedToken])
+
   // Auto-associate USDT0 when selected and not yet associated
   // Requires HBAR balance to pay for the on-chain transaction
   useEffect(() => {
     if (selectedToken !== 'USDT0' || !isConnected || isCheckingAssoc || isUsdt0Associated || isAssociating || hederaBalancesLoading) return
     if (hbarBalance < 1) {
-      setShowFundDialog(true)
+      if (!fundDialogShownRef.current) {
+        fundDialogShownRef.current = true
+        setShowFundDialog(true)
+      }
       return
     }
     associateToken(USDT0_HEDERA.TOKEN_ID).then((success) => {
