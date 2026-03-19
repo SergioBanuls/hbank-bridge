@@ -16,8 +16,8 @@ import { SessionActionButtons } from './SessionActionButtons';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Bridge' },
-  { href: '/transfer', label: 'Transfer', requiresAuth: true },
   { href: '/portfolio', label: 'Portfolio' },
+  { href: '/transfer', label: 'Withdraw', requiresAuth: true },
 ] as const;
 
 const getNavLinkClassName = (isActive: boolean, disabled: boolean) => {

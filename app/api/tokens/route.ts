@@ -16,7 +16,7 @@ const EXTRA_TOKENS = [
     decimals: 6,
     address: '0.0.10282787',
     solidityAddress: '0x00000000000000000000000000000000009Ce723',
-    icon: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+    icon: '/usdt0-Logo.png',
     providers: ['usdt0'],
   },
 ];

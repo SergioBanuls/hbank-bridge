@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useConnectionContext } from '@/contexts/ConnectionContext'
-import { MissionsSheet } from './MissionsSheet'
+import { ProfileSheet } from './ProfileSheet'
 import { LoginDialog } from './auth/LoginDialog'
 import { FundAccountDialog } from './FundAccountDialog'
 import { Button } from './ui/button'
@@ -20,7 +20,7 @@ export function SessionActionButtons() {
         creatingAccount,
     } = useConnectionContext()
 
-    const [isMissionsSheetOpen, setIsMissionsSheetOpen] = useState(false)
+    const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false)
     const [isConnectionSelectorOpen, setIsConnectionSelectorOpen] = useState(false)
     const [fundDialogAccountId, setFundDialogAccountId] = useState<string | null>(null)
 
@@ -61,7 +61,7 @@ export function SessionActionButtons() {
         buttons = (
             <>
                 <Button
-                    onClick={() => setIsMissionsSheetOpen(true)}
+                    onClick={() => setIsProfileSheetOpen(true)}
                     variant="ghost"
                     className='relative group overflow-hidden bg-white/5 hover:bg-white/10 border border-white/10 hover:border-blue-500/30 text-white rounded-full pl-2 pr-4 h-11 transition-all duration-300'
                 >
@@ -70,7 +70,7 @@ export function SessionActionButtons() {
                     <div className='flex items-center gap-3 relative z-10'>
                         <div className='w-7 h-7 rounded-full bg-linear-to-br from-blue-500 to-cyan-600 p-px shadow-lg shadow-blue-500/20'>
                             <div className='w-full h-full rounded-full bg-black flex items-center justify-center'>
-                                <User className='w-3.5 h-3.5 text-green-400' />
+                                <User className='w-3.5 h-3.5 text-blue-500' />
                             </div>
                         </div>
                         <div className='flex flex-col items-start gap-0.5'>
@@ -83,9 +83,9 @@ export function SessionActionButtons() {
                         </div>
                     </div>
                 </Button>
-                <MissionsSheet
-                    open={isMissionsSheetOpen}
-                    onOpenChange={setIsMissionsSheetOpen}
+                <ProfileSheet
+                    open={isProfileSheetOpen}
+                    onOpenChange={setIsProfileSheetOpen}
                     accountId={account}
                 />
             </>

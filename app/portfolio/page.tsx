@@ -308,7 +308,7 @@ export default function PortfolioPage() {
                                                 portfolioPercent={totalValue > 0 ? (evmUsdcValue / totalValue) * 100 : undefined}
                                             />
                                             <TokenRow
-                                                icon="https://assets.coingecko.com/coins/images/325/small/Tether.png"
+                                                icon="/usdt0-Logo.png"
                                                 name="Tether (OFT)"
                                                 symbol="USD₮0"
                                                 balance={formatBalance(parseFloat(usdt0))}

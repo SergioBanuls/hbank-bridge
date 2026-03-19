@@ -8,24 +8,25 @@ import {
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import {
-  Copy, LogOut, Check, Trophy, Target, Crown, TrendingUp,
+  Copy, LogOut, Check,
   Shield, RotateCcw, AlertTriangle, CheckCircle2, XCircle,
+  User,
 } from 'lucide-react'
 import Image from 'next/image'
 import { useState, useEffect } from 'react'
 import { useConnectionContext } from '@/contexts/ConnectionContext'
 
-interface MissionsSheetProps {
+interface ProfileSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   accountId: string
 }
 
-export function MissionsSheet({
+export function ProfileSheet({
   open,
   onOpenChange,
   accountId,
-}: MissionsSheetProps) {
+}: ProfileSheetProps) {
   const { disconnect, session, custodialAccountId, custodialEvmAddress } = useConnectionContext()
   const [isCopied, setIsCopied] = useState(false)
 
@@ -110,15 +111,6 @@ export function MissionsSheet({
 
           {/* Header */}
           <div className='relative z-10 p-6 pb-4 border-b border-white/5 backdrop-blur-xl bg-black/20'>
-            <SheetHeader className='mb-6'>
-              <SheetTitle className='flex items-center gap-3 text-white text-xl font-bold tracking-tight'>
-                <div className='p-2 rounded-xl bg-gradient-to-br from-amber-400/20 to-orange-400/20 border border-amber-400/30'>
-                  <Trophy className='w-5 h-5 text-amber-400' />
-                </div>
-                Mission Center
-              </SheetTitle>
-            </SheetHeader>
-
             {/* Profile Card */}
             <div className='relative group overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 transition-all'>
               <div className='absolute inset-0 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 opacity-0 transition-opacity duration-500' />
@@ -129,7 +121,7 @@ export function MissionsSheet({
                     <div className='w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden'>
                       <div className='w-full h-full bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center'>
                         <span className='text-lg font-bold text-white'>
-                          {accountId.slice(0, 2)}
+                          <User className='w-5 h-5 text-blue-500' />
                         </span>
                       </div>
                     </div>
@@ -144,6 +136,11 @@ export function MissionsSheet({
                   <p className='text-sm font-mono text-white font-semibold truncate'>
                     {accountId}
                   </p>
+                  {custodialEvmAddress && (
+                    <p className='text-[11px] font-mono text-white truncate mt-0.5'>
+                      {custodialEvmAddress.slice(0, 10)}...{custodialEvmAddress.slice(-8)}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -152,11 +149,10 @@ export function MissionsSheet({
                   onClick={handleCopyAddress}
                   variant='ghost'
                   size='sm'
-                  className={`flex-1 h-8 text-xs font-medium transition-all duration-300 ${
-                    isCopied
+                  className={`flex-1 h-8 text-xs font-medium transition-all duration-300 ${isCopied
                       ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
                       : 'bg-white/5 text-neutral-300 hover:bg-white/10 hover:text-white'
-                  }`}
+                    }`}
                 >
                   {isCopied ? (
                     <>
@@ -186,70 +182,6 @@ export function MissionsSheet({
 
           {/* Scrollable Content */}
           <div className='relative z-10 flex-1 overflow-y-auto p-6 pt-2 space-y-6'>
-            {/* Active Missions */}
-            <div className='space-y-4'>
-              <div className='flex items-center justify-between'>
-                <h3 className='text-sm font-bold text-white flex items-center gap-2'>
-                  <Target className='w-4 h-4 text-blue-400' />
-                  Active Missions
-                </h3>
-                <span className='text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30'>
-                  LIVE
-                </span>
-              </div>
-
-              {/* Mission Card - Early Bridger */}
-              <div className='relative overflow-hidden rounded-2xl border border-blue-500/30 bg-gradient-to-b from-blue-900/20 to-black/40 p-1'>
-                <div className='absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent opacity-50' />
-
-                <div className='relative bg-[#0a0a0a]/80 backdrop-blur-sm rounded-xl p-4 space-y-4'>
-                  <div className='flex items-start gap-4'>
-                    <div className='relative group'>
-                      <div className='absolute inset-0 bg-blue-500 blur-lg opacity-40 group-hover:opacity-60 transition-opacity' />
-                      <div className='relative w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center shadow-xl'>
-                        <Crown className='w-6 h-6 text-white' />
-                      </div>
-                    </div>
-
-                    <div className='flex-1'>
-                      <h4 className='text-base font-bold text-white mb-1'>
-                        Early Bridger
-                      </h4>
-                      <p className='text-xs text-neutral-400 leading-relaxed'>
-                        Complete your first <span className='text-blue-300 font-bold'>bridge transaction</span> to earn your badge.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className='h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent' />
-
-                  {/* Progress Placeholder */}
-                  <div className='w-full space-y-2'>
-                    <div className='flex justify-between items-end'>
-                      <span className='text-xs font-medium text-neutral-400'>
-                        Progress Tracker
-                      </span>
-                      <div className='flex items-center gap-1'>
-                        <TrendingUp className='w-3 h-3 text-neutral-400' />
-                        <span className='text-xs text-neutral-400'>
-                          Coming soon
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className='relative w-full h-4 bg-black/40 rounded-full overflow-hidden border border-white/5 shadow-inner'>
-                      <div
-                        className='absolute top-0 left-0 h-full bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 transition-all duration-1000 ease-out rounded-full'
-                        style={{ width: '0%' }}
-                      >
-                        <div className='absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite] skew-x-12' />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {/* ─── Security Section ─── */}
             <div className='space-y-4'>
               <div className='flex items-center justify-between'>

@@ -19,7 +19,7 @@ export function TokenSelector({ label, selectedToken, onClick, badge }: TokenSel
         {selectedToken ? (
           <>
             <div className="relative w-10 h-10 shrink-0">
-              <div className="w-10 h-10 rounded-full overflow-hidden">
+              <div className="relative w-10 h-10 rounded-full overflow-hidden">
                 <Image
                   src={selectedToken.icon || '/NotFound.png'}
                   alt={selectedToken.symbol}

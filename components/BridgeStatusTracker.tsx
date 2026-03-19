@@ -35,14 +35,7 @@ function HederaIcon() {
 function LayerZeroIcon() {
   return (
     <div className="w-8 h-8 flex items-center justify-center">
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-        <circle cx="14" cy="14" r="14" fill="#0F0F0F" />
-        <path
-          d="M14 6L7 18.5H10.5L14 12L17.5 18.5H21L14 6Z"
-          fill="white"
-        />
-        <path d="M10.5 18.5H17.5L14 24L10.5 18.5Z" fill="white" opacity="0.6" />
-      </svg>
+      <Image src="/LZ.png" alt="LayerZero" width={28} height={28} />
     </div>
   )
 }

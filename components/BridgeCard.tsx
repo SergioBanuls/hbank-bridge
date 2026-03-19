@@ -34,7 +34,7 @@ interface LiquidityInfo {
 // ── Inline SVG Icons ──
 
 const USDC_ICON_URL = 'https://dwk1opv266jxs.cloudfront.net/icons/tokens/0.0.456858.png'
-const USDT0_ICON_URL = 'https://assets.coingecko.com/coins/images/325/small/Tether.png'
+const USDT0_ICON_URL = '/usdt0-Logo.png'
 
 
 function HederaNetworkBadge() {
@@ -410,18 +410,9 @@ export function BridgeCard() {
   const toNetwork = direction === 'hedera_to_arbitrum' ? 'Arbitrum' : 'Hedera'
 
   return (
-    <div className="bg-neutral-900 rounded-3xl p-6 min-h-[410px] flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-2xl font-bold text-white">Bridge</h2>
-        <div className="flex items-center gap-1.5 text-xs text-neutral-500">
-          <span>Powered by</span>
-          <span className="font-medium text-neutral-400">LayerZero</span>
-        </div>
-      </div>
-
-      {/* Token Slide Toggle */}
-      <div className="flex justify-center mb-5">
+    <div className="flex flex-col gap-4">
+      {/* Token Slide Toggle — above the card */}
+      <div className="flex justify-center">
         <div className="relative flex bg-neutral-800/80 backdrop-blur-sm rounded-full p-1 border border-white/[0.04] overflow-hidden">
           {/* Sliding backdrop */}
           <div
@@ -470,6 +461,16 @@ export function BridgeCard() {
               USD₮0
             </span>
           </button>
+        </div>
+      </div>
+
+    <div className="bg-neutral-900 rounded-3xl p-6 min-h-[410px] flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-2xl font-bold text-white">Bridge</h2>
+        <div className="flex items-center gap-1.5 text-xs text-neutral-500">
+          <span>Powered by</span>
+          <span className="font-medium text-neutral-400">LayerZero</span>
         </div>
       </div>
 
@@ -779,7 +780,7 @@ export function BridgeCard() {
               </div>
               <div>
                 <div className="text-sm font-medium text-white">Gas Drop</div>
-                <div className="text-xs text-white/50">Receive ~$2 ETH on Arbitrum</div>
+                <div className="text-xs text-white/50">Receive 0.0007 ETH on Arbitrum</div>
               </div>
             </div>
             <button
@@ -895,6 +896,7 @@ export function BridgeCard() {
           accountId={account}
         />
       )}
+    </div>
     </div>
   )
 }
