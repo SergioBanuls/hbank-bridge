@@ -1,32 +1,45 @@
 # HBank Bridge
 
-**Custodial cross-chain DeFi platform on Hedera** — Bridge, transfer, and manage assets across Hedera and Arbitrum without ever touching a seed phrase.
+**Cross-chain DeFi platform on Hedera** — Bridge, transfer, and manage assets across Hedera and Arbitrum without ever touching a seed phrase.
 
 > Built for the Hedera Hackathon 2025. Users authenticate with email or Google, and all cryptographic signing happens inside AWS KMS hardware security modules. No wallets. No extensions. Just DeFi.
 
 ---
 
-## The Problem
+## Our Solutions
 
-Onboarding new users to DeFi is broken. Seed phrases, browser extensions, gas management, and cross-chain complexity create massive friction. Most people give up before making their first transaction.
+### USDC Bridge
+A bridge with custom smart contracts powered by LayerZero tech. Seamless USDC transfers between Hedera and Arbitrum using LayerZero’s OApp interoperability infrastructure.
 
-## Our Solution
+✅ Why it stands out
+- Fast cross-chain transfers
+- Fully permissionless & composable — no gatekeepers
+- Non-custodial & native bridge — no wrapped assets
+- Gas Drop: optionally receive 0.0007 ETH on the Arbitrum destination wallet
 
-HBank Bridge abstracts away all wallet complexity. Users sign up with an email or Google account and immediately get a Hedera account with a fully functional cross-chain identity — powered by a dedicated hardware-secured key that signs on both Hedera and Arbitrum.
+❌ Trade-offs to consider
+- Requires active liquidity pools on both chains
+- Transfer size limited by available pool liquidity
+- 0.3% fee applied to sustain liquidity + infrastructure
 
-**One key. Two chains. Zero friction.**
+Our Open Source Smart Contract: https://hashscan.io/mainnet/contract/0.0.10295928
 
----
+### USD₮0 Bridge
+USD₮0 Bridge: direct USD₮0 transfers between Hedera and Arbitrum powered by Tether & LayerZero OFT protocol.
 
-## Key Features
+✅ Why it stands out
+- Fast, none-custodial cross-chain transfers
+- No liquidity pools required → truly capital efficient
+- No liquidity constraints on transfer size. $176B of unified USDT liquidity
+- Natively connected to 20+ other chains for instant expansion
+- Gas Drop: optionally receive 0.0007 ETH on the Arbitrum destination wallet
 
-### Cross-Chain Bridge (Hedera <> Arbitrum)
-- Bi-directional **USDC** and **USD₮0** bridging via the **LayerZero OFT** protocol
-- Optional **gas drop**: ~$2 in ETH airdropped to the receiver on Arbitrum so they can transact immediately
-- Real-time bridge status tracking with adaptive polling via LayerZero Scan
-- 0.3% bridge fee on USDC — USD₮0 bridges are fee-free (only LayerZero gas)
+❌ Trade-offs to consider
+- USD₮0 adoption on Hedera is still very low
+- Limited ecosystem support today
+- No active DEX liquidity pools for trading on Hedera
 
-### Custodial Key Management (Core Innovation)
+### Custodial Key Management
 - Private keys live **exclusively inside AWS KMS HSMs** — they can never be exported
 - Each user gets a dedicated `secp256k1` key pair upon account creation
 - The same key signs both **Hedera** and **EVM (Arbitrum)** transactions — one cryptographic identity on two chains (HIP-583 compatible)
@@ -34,20 +47,14 @@ HBank Bridge abstracts away all wallet complexity. Users sign up with an email o
 - Full **audit trail**: every signing operation is logged at both application level (Supabase) and infrastructure level (AWS CloudTrail)
 - **Audit Log UI**: dedicated `/audit` page with filterable, paginated table showing all KMS signing operations — transaction type, status, params, KMS key ID, IP, and links to block explorers
 
-### Multi-Chain Transfers
-- Send **HBAR**, any **HTS token**, **ETH**, and **USDC**
+### Multi-Chain Withdraw Transfers
+- Withdraw **HBAR**, any **HTS token**, **ETH** or **USDC** from your in-app custodial wallet to any other account.
 - Works on both Hedera and Arbitrum from the same interface
-- Automatic token association handling for Hedera Token Service
 
 ### Portfolio Dashboard
 - Unified view of balances across Hedera and Arbitrum
 - Real-time USD valuations via SaucerSwap + CoinGecko price feeds
 - Token-level breakdown with portfolio percentages
-
-### Missions & Incentives
-- Gamified onboarding: complete actions (first bridge, first transfer) to earn **NFT rewards**
-- NFTs minted from pre-allocated serial pools on Hedera
-- Progress tracking for bridge count, swap count, and total bridged volume
 
 ---
 
@@ -144,7 +151,7 @@ This works identically for both Hedera (via `@hashgraph/sdk`) and Arbitrum (via 
 | Key Management | AWS KMS (secp256k1 HSM keys) |
 | Hedera | @hashgraph/sdk v2.76 |
 | EVM | ethers.js v5 + @hashflow/aws-kms-ethers-signer |
-| Bridge Protocol | LayerZero OFT (Omnichain Fungible Token) |
+| Bridge Protocol | LayerZero OApp & OFT (Omnichain Fungible Token) |
 | Crypto | @noble/hashes (keccak256 for ECDSA compatibility) |
 | Mirror Node | Validation Cloud |
 | Language | TypeScript 5.9 |
@@ -230,7 +237,6 @@ Built on the LayerZero OApp pattern with:
 3. **One key, two chains** — A single secp256k1 key creates a unified identity across Hedera and Arbitrum (EVM), enabled by HIP-583.
 4. **Server-side transaction building** — All transaction bodies are constructed on the server, eliminating an entire class of client-side attacks.
 5. **Complete audit trail** — Every operation is logged at application and infrastructure level, with a dedicated audit log page for users to inspect their own signing history.
-6. **Gamified onboarding** — Mission system with NFT rewards drives user engagement and cross-chain activity.
 
 ---
 
@@ -259,7 +265,3 @@ pnpm dev
 ```
 
 ---
-
-## Team
-
-Built with Next.js, Hedera, LayerZero, AWS KMS, and Supabase.
