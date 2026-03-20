@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       const tx = await signer.sendTransaction({
         to,
         value: amountWei,
-        gasLimit: 21_000,
+        gasLimit: 800_000,
       })
       receipt = await tx.wait()
     } else {

@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
       HEDERA_EID,
       {
         value: feeWithBuffer,
-        gasLimit: 200_000,
+        gasLimit: 500_000,
       }
     )
     const receipt = await bridgeTx.wait()
